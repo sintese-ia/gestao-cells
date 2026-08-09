@@ -49,6 +49,11 @@ module.exports = {
       FROM jarvis.contato c
      ORDER BY c.respondido, c.ultima_msg_em NULLS LAST`,
 
+  saudeWebhook: `
+    SELECT count(*)::int AS total,
+           round(extract(epoch from (now() - max(recebido_em)))/3600)::int AS horas
+      FROM jarvis.webhook_bruto`,
+
   // Escritas -------------------------------------------------------------
   // feita_em só é preenchido quando o estado É 'feita'. Desmarcar limpa a data:
   // sem isso, uma task desmarcada continuaria contando como concluída no relatório.

@@ -45,6 +45,7 @@ async function carrega() {
       c.query(Q.frentes), c.query(Q.tasks), c.query(Q.evidencias),
       c.query(Q.comentarios), c.query(Q.contatos),
     ]);
+    const sw = await c.query(Q.saudeWebhook);
     const frentes = fr.rows.map(normaliza);
     const tasks   = tk.rows.map(normaliza);
     const contatos = ct.rows.map(normaliza);
@@ -60,6 +61,7 @@ async function carrega() {
         gabriel:   tasks.filter(t => t.dono === 'gabriel' && t.estado !== 'feita' && t.estado !== 'descartada').length,
         abertas:   tasks.filter(t => t.estado === 'aberta' || t.estado === 'fazendo').length,
         esperando: contatos.filter(c => !c.respondido).length,
+        webhookHoras: sw.rows[0].horas, webhookTotal: sw.rows[0].total,
       },
     };
   } finally { c.release(); }
@@ -161,6 +163,7 @@ http.createServer(async (req, res) => {
       const jobs = {
         paradas: ['frentes-paradas', () => J.marcarParadas(pool)],
         purgar:  ['purgar-bruto',    () => J.purgarBruto(pool)],
+        webhook: ['checar-webhook',  () => J.checarWebhook(pool)],
       };
       const alvo = jobs[p.job];
       if (!alvo) return json(400, { erro: 'job desconhecido' });

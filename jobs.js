@@ -175,6 +175,34 @@ async function purgarBruto(pool) {
            detalhe: `retenção ${RETENCAO_DIAS}d · ${pend.rows[0].n} ainda não processados` };
 }
 
+// ---------------------------------------------------------------- silêncio da Meta
+// `webhook_bruto` vazio é AMBÍGUO: pode ser "ninguém mandou mensagem" ou "quebrou entre
+// a Meta e o app". Ambiguidade em silêncio é o que faz a gente descobrir tarde — e aqui
+// descobrir tarde significa cliente sem resposta durante dias.
+//
+// O limite de 48h é um CHUTE por enquanto: não existe baseline de volume de DM da conta.
+// Depois de uma semana com dado real, calibrar pela mediana observada. Enquanto isso,
+// prefiro um alarme grosseiro a nenhum.
+const SILENCIO_H = +process.env.ALARME_SILENCIO_HORAS || 48;
+
+async function checarWebhook(pool) {
+  const r = await pool.query(
+    `SELECT max(recebido_em) AS ultimo,
+            round(extract(epoch from (now() - max(recebido_em)))/3600)::int AS horas,
+            count(*)::int AS total
+       FROM jarvis.webhook_bruto`);
+  const { ultimo, horas, total } = r.rows[0];
+  if (!ultimo) {
+    const e = new Error(`nenhuma entrega da Meta desde que o webhook passou a gravar o cru`);
+    e.alarme = true; throw e;
+  }
+  if (horas >= SILENCIO_H) {
+    const e = new Error(`${horas}h sem entrega da Meta (limite ${SILENCIO_H}h) — pode ser silêncio real ou canal quebrado`);
+    e.alarme = true; throw e;
+  }
+  return { itens: total, detalhe: `última entrega há ${horas}h · limite ${SILENCIO_H}h` };
+}
+
 // ---------------------------------------------------------------- agendador
 async function roda(pool, nome, fn) {
   try {
@@ -205,6 +233,7 @@ function agendar(pool, env) {
     ultimoDia = dia;
     await roda(pool, 'frentes-paradas', () => marcarParadas(pool));
     await roda(pool, 'purgar-bruto', () => purgarBruto(pool));
+    await roda(pool, 'checar-webhook', () => checarWebhook(pool));
   };
 
   setInterval(tick, 10 * 60 * 1000).unref();
@@ -212,4 +241,4 @@ function agendar(pool, env) {
   console.log('agendador ligado · alvo 06:40 America/Sao_Paulo');
 }
 
-module.exports = { agendar, syncDM, marcarParadas, purgarBruto, roda };
+module.exports = { agendar, syncDM, marcarParadas, purgarBruto, checarWebhook, roda };

@@ -115,6 +115,7 @@
       <div class="s-red"><b id="k-cri">–</b><span>FRENTES CRÍTICAS</span></div>
       <div class="s-amb"><b id="k-esp">–</b><span>ESPERANDO VOCÊ</span></div>
       <div class="s-arc"><b id="k-abe">–</b><span>TAREFAS ABERTAS</span></div>
+      <div id="k-wh-box"><b id="k-wh">–</b><span>ÚLT. ENTREGA DA META</span></div>
     </div>
   </header>
 
@@ -221,6 +222,13 @@ function pinta() {
   $('#c-gab').textContent = minhas.length + ' abertas';
   $('#c-esp').textContent = pend.length + ' sem resposta';
   $('#c-fr').textContent  = D.frentes.length + ' no total';
+
+  // Silêncio prolongado aqui é ambíguo — pode ser ninguém falando com a Cells, ou o
+  // canal quebrado entre a Meta e o app. Mostrar a idade evita descobrir isso tarde.
+  const wh = D.resumo.webhookHoras, box = $('#k-wh-box');
+  $('#k-wh').textContent = D.resumo.webhookTotal === 0 ? '—'
+    : (wh < 1 ? 'agora' : wh + 'h');
+  box.className = (D.resumo.webhookTotal === 0 || wh >= 48) ? 's-red' : 's-arc';
 
   // ---- ação sua ----
   const A = $('#acao-sua'); A.textContent = '';
