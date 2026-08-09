@@ -1,0 +1,309 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Gestão Cells</title>
+<style>
+  :root{
+    --void:#080C11; --card:#0F151C; --card2:#141C25; --line:#222E3A;
+    --ink:#DFE7EE; --ink2:#94A6B6; --ink3:#63758A;
+    --arc:#4ECBDD; --red:#F07A70; --amb:#DFA33C; --grn:#4FC496;
+    --mono:ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;padding:0 16px 90px;background:var(--void);color:var(--ink);
+    font:15px/1.55 -apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;
+    -webkit-font-smoothing:antialiased}
+  .wrap{max-width:940px;margin:0 auto}
+  a{color:var(--arc)}
+  :focus-visible{outline:2px solid var(--arc);outline-offset:2px;border-radius:2px}
+
+  header{padding:26px 0 16px;border-bottom:1px solid var(--line);margin-bottom:20px;
+    display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap}
+  h1{margin:0;font:600 15px/1 var(--mono);letter-spacing:.24em;color:var(--arc)}
+  h1 small{display:block;font:400 10px/1 var(--mono);letter-spacing:.14em;color:var(--ink3);margin-top:9px}
+  .stat{display:flex;gap:22px;flex-wrap:wrap}
+  .stat div{text-align:right}
+  .stat b{display:block;font:600 21px/1 var(--mono);font-variant-numeric:tabular-nums}
+  .stat span{font:400 9px/1 var(--mono);letter-spacing:.13em;color:var(--ink3);display:block;margin-top:5px}
+  .s-red b{color:var(--red)} .s-arc b{color:var(--arc)} .s-amb b{color:var(--amb)}
+
+  h2{font:500 10px/1 var(--mono);letter-spacing:.22em;color:var(--ink2);margin:28px 0 10px;
+    padding-bottom:7px;border-bottom:1px solid var(--line)}
+  h2 i{font-style:normal;color:var(--ink3)}
+
+  .box{background:var(--card);border:1px solid var(--line);border-radius:3px;margin-bottom:8px}
+
+  /* ---- tarefa ---- */
+  .t{display:flex;gap:11px;padding:11px 14px;border-bottom:1px solid rgba(34,46,58,.55);align-items:flex-start}
+  .t:last-child{border-bottom:none}
+  .t input[type=checkbox]{flex:none;width:17px;height:17px;margin:2px 0 0;accent-color:var(--arc);cursor:pointer}
+  .t .c{flex:1;min-width:0}
+  .t b{display:block;font-size:14.5px;font-weight:600}
+  .t p{margin:3px 0 0;font-size:12.5px;color:var(--ink2);line-height:1.45}
+  .t.ok b{text-decoration:line-through;color:var(--ink3)}
+  .t.ok p{color:var(--ink3)}
+  .who{font:600 8.5px/1 var(--mono);letter-spacing:.1em;padding:3px 5px;border-radius:2px;
+    flex:none;margin-top:3px}
+  .w-g{background:#2E1614;color:var(--red)} .w-c{background:#0E2A31;color:var(--arc)}
+  .w-a{background:#2C2110;color:var(--amb)}
+
+  /* ---- frente ---- */
+  details.f{background:var(--card);border:1px solid var(--line);border-left:2px solid var(--ink3);
+    border-radius:3px;margin-bottom:7px}
+  details.f[data-e=critico]{border-left-color:var(--red)}
+  details.f[data-e=andando]{border-left-color:var(--amb)}
+  details.f[data-e=pronto]{border-left-color:var(--grn)}
+  details.f[data-e=sem_contexto]{border-left-color:var(--ink3)}
+  summary{padding:12px 15px;cursor:pointer;list-style:none;display:flex;gap:12px;align-items:baseline}
+  summary::-webkit-details-marker{display:none}
+  summary:hover{background:var(--card2)}
+  summary .n{font:600 9.5px/1 var(--mono);color:var(--ink3);flex:none;padding-top:3px}
+  summary .tt{flex:1;min-width:0}
+  summary b{font-size:15px;font-weight:640}
+  summary p{margin:2px 0 0;font-size:12.5px;color:var(--ink2)}
+  summary .badge{font:600 8.5px/1 var(--mono);letter-spacing:.1em;padding:3px 6px;border-radius:2px;flex:none}
+  .b-red{background:#2E1614;color:var(--red)} .b-amb{background:#2C2110;color:var(--amb)}
+  .b-grn{background:#102C22;color:var(--grn)} .b-off{background:#151D26;color:var(--ink3)}
+  .inner{padding:2px 15px 15px;border-top:1px solid var(--line)}
+  .destrava{background:var(--card2);border-radius:3px;padding:10px 12px;margin:12px 0;font-size:13.5px;color:var(--ink2)}
+  .destrava b{color:var(--ink);font-size:11px;font-family:var(--mono);letter-spacing:.12em;display:block;margin-bottom:4px}
+
+  .sub{font:500 9.5px/1 var(--mono);letter-spacing:.16em;color:var(--ink3);margin:14px 0 7px}
+
+  /* ---- evidência ---- */
+  .ev{border-left:2px solid var(--line);padding:7px 0 7px 11px;margin-bottom:7px}
+  .ev .top{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+  .ev b{font-size:13.5px;font-weight:600;flex:1;min-width:200px}
+  .cf{font:600 8px/1 var(--mono);letter-spacing:.09em;padding:3px 5px;border-radius:2px;flex:none}
+  .cf-confirmado{background:#102C22;color:var(--grn)}
+  .cf-provavel{background:#2C2110;color:var(--amb)}
+  .cf-hipotese{background:#151D26;color:var(--ink2)}
+  .cf-refutado{background:#2E1614;color:var(--red)}
+  .ev .val{font:12.5px var(--mono);color:var(--arc);margin-top:3px}
+  .ev .met{font-size:12px;color:var(--ink3);margin-top:4px;line-height:1.45}
+  .ev .met u{text-decoration:none;color:var(--ink2)}
+
+  /* ---- comentário ---- */
+  .cm{background:var(--card2);border-radius:3px;padding:8px 11px;margin-bottom:6px;font-size:13.5px}
+  .cm i{font-style:normal;font:9.5px var(--mono);color:var(--ink3);letter-spacing:.08em;display:block;margin-bottom:3px}
+  .add{display:flex;gap:7px;margin-top:9px}
+  .add input{flex:1;padding:8px 11px;background:var(--void);border:1px solid var(--line);
+    border-radius:3px;color:var(--ink);font-size:13.5px;font-family:inherit}
+  .add button{padding:8px 15px;background:var(--card2);border:1px solid var(--line);border-radius:3px;
+    color:var(--arc);font:600 12px/1 var(--mono);letter-spacing:.08em;cursor:pointer}
+  .add button:hover{background:var(--arc);color:var(--void);border-color:var(--arc)}
+
+  .vazio{color:var(--ink3);font-size:13.5px;padding:12px 15px}
+  #flash{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:var(--arc);
+    color:var(--void);font:600 13px system-ui;padding:9px 18px;border-radius:3px;opacity:0;
+    transition:opacity .18s;pointer-events:none;z-index:9}
+  #flash.on{opacity:1}
+  #flash.err{background:var(--red);color:#fff}
+  footer{margin-top:36px;padding-top:14px;border-top:1px solid var(--line);
+    font:10.5px/1.8 var(--mono);color:var(--ink3)}
+  @media(max-width:620px){.stat{gap:16px}.stat b{font-size:18px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>GESTÃO CELLS<small id="ger"></small></h1>
+    <div class="stat">
+      <div class="s-red"><b id="k-gab">–</b><span>AÇÃO SUA</span></div>
+      <div class="s-red"><b id="k-cri">–</b><span>FRENTES CRÍTICAS</span></div>
+      <div class="s-amb"><b id="k-esp">–</b><span>ESPERANDO VOCÊ</span></div>
+      <div class="s-arc"><b id="k-abe">–</b><span>TAREFAS ABERTAS</span></div>
+    </div>
+  </header>
+
+  <h2>AÇÃO SUA <i id="c-gab"></i></h2>
+  <div class="box" id="acao-sua"></div>
+
+  <h2>ESPERANDO RESPOSTA <i id="c-esp"></i></h2>
+  <div class="box" id="contatos"></div>
+
+  <h2>AS FRENTES <i id="c-fr"></i></h2>
+  <div id="frentes"></div>
+
+  <footer>
+    O QUE VOCÊ MARCA AQUI É O QUE A PRÓXIMA SESSÃO DO CLAUDE VAI LER.<br>
+    FONTE ÚNICA: SCHEMA <b>JARVIS</b> NO POSTGRES.
+  </footer>
+</div>
+<div id="flash" role="status" aria-live="polite"></div>
+
+<script>
+// Os dados são injetados pelo servidor — a tela nunca recalcula regra de negócio.
+const D = __DADOS__;
+const $ = s => document.querySelector(s);
+const el = (t, c, h) => { const e = document.createElement(t); if (c) e.className = c;
+  if (h !== undefined) e.innerHTML = h; return e; };
+const escapa = s => String(s == null ? '' : s)
+  .replace(/[&<>"]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));
+
+let flashT;
+function flash(msg, erro) {
+  const f = $('#flash'); f.textContent = msg;
+  f.className = 'on' + (erro ? ' err' : '');
+  clearTimeout(flashT); flashT = setTimeout(() => f.className = '', 2200);
+}
+
+async function post(rota, corpo) {
+  const r = await fetch(rota, { method: 'POST',
+    headers: { 'content-type': 'application/json' }, body: JSON.stringify(corpo) });
+  if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.erro || ('HTTP ' + r.status)); }
+  return r.json();
+}
+
+const DONO = { gabriel: ['w-g','VC'], claude: ['w-c','CL'], ambos: ['w-a','AMBOS'] };
+const BADGE = { critico: ['b-red','CRÍTICO'], andando: ['b-amb','ANDANDO'],
+                pronto: ['b-grn','PRONTO'], sem_contexto: ['b-off','SEM CONTEXTO'],
+                pausado: ['b-off','PAUSADO'] };
+
+function linhaTask(t) {
+  const feita = t.estado === 'feita';
+  const d = DONO[t.dono] || DONO.ambos;
+  const div = el('div', 't' + (feita ? ' ok' : ''));
+  const cb = el('input'); cb.type = 'checkbox'; cb.checked = feita;
+  cb.setAttribute('aria-label', 'Concluir: ' + t.titulo);
+  cb.addEventListener('change', async () => {
+    cb.disabled = true;
+    try {
+      await post('/api/task', { id: t.id, estado: cb.checked ? 'feita' : 'aberta' });
+      t.estado = cb.checked ? 'feita' : 'aberta';
+      div.classList.toggle('ok', cb.checked);
+      flash(cb.checked ? 'Marcado como feito' : 'Reaberto');
+      pinta();
+    } catch (e) { cb.checked = !cb.checked; flash(e.message, true); }
+    finally { cb.disabled = false; }
+  });
+  div.append(cb, el('span', 'who ' + d[0], d[1]),
+    el('div', 'c', '<b>' + escapa(t.titulo) + '</b>' +
+      (t.detalhe ? '<p>' + escapa(t.detalhe) + '</p>' : '')));
+  return div;
+}
+
+function caixaComentario(frenteId) {
+  const box = el('div', 'add');
+  const inp = el('input');
+  inp.placeholder = 'Escrever um comentário…';
+  inp.setAttribute('aria-label', 'Comentário');
+  const bt = el('button', null, 'ENVIAR');
+  const enviar = async () => {
+    const texto = inp.value.trim(); if (!texto) return;
+    bt.disabled = true;
+    try {
+      await post('/api/comentario', { frente_id: frenteId, texto });
+      D.comentarios.push({ frente_id: frenteId, autor: 'gabriel', texto,
+        quando: new Date().toLocaleString('pt-BR', { day:'2-digit', month:'2-digit',
+          hour:'2-digit', minute:'2-digit' }).replace(',', '') });
+      inp.value = ''; flash('Comentário salvo'); pinta();
+    } catch (e) { flash(e.message, true); } finally { bt.disabled = false; }
+  };
+  bt.addEventListener('click', enviar);
+  inp.addEventListener('keydown', e => { if (e.key === 'Enter') enviar(); });
+  box.append(inp, bt);
+  return box;
+}
+
+function pinta() {
+  $('#ger').textContent = 'ATUALIZADO ' + D.gerado;
+  const abertas = t => t.estado === 'aberta' || t.estado === 'fazendo' || t.estado === 'bloqueada';
+  const minhas  = D.tasks.filter(t => t.dono === 'gabriel' && abertas(t));
+  const pend    = D.contatos.filter(c => !c.respondido);
+
+  $('#k-gab').textContent = minhas.length;
+  $('#k-cri').textContent = D.frentes.filter(f => f.estado === 'critico').length;
+  $('#k-esp').textContent = pend.length;
+  $('#k-abe').textContent = D.tasks.filter(abertas).length;
+  $('#c-gab').textContent = minhas.length + ' abertas';
+  $('#c-esp').textContent = pend.length + ' sem resposta';
+  $('#c-fr').textContent  = D.frentes.length + ' no total';
+
+  // ---- ação sua ----
+  const A = $('#acao-sua'); A.textContent = '';
+  const suas = D.tasks.filter(t => t.dono === 'gabriel' &&
+    (abertas(t) || t.estado === 'feita'));
+  if (!suas.length) A.append(el('div', 'vazio', 'Nada esperando você. Raro.'));
+  suas.forEach(t => A.append(linhaTask(t)));
+
+  // ---- contatos ----
+  const C = $('#contatos'); C.textContent = '';
+  if (!D.contatos.length) C.append(el('div', 'vazio', 'Nenhum contato registrado ainda.'));
+  D.contatos.forEach(c => {
+    const div = el('div', 't' + (c.respondido ? ' ok' : ''));
+    const cb = el('input'); cb.type = 'checkbox'; cb.checked = !!c.respondido;
+    cb.setAttribute('aria-label', 'Marcar respondido: ' + c.quem);
+    cb.addEventListener('change', async () => {
+      cb.disabled = true;
+      try {
+        await post('/api/contato', { id: c.id, respondido: cb.checked });
+        c.respondido = cb.checked; flash(cb.checked ? 'Marcado como respondido' : 'Reaberto'); pinta();
+      } catch (e) { cb.checked = !cb.checked; flash(e.message, true); }
+      finally { cb.disabled = false; }
+    });
+    const canal = (c.canal || '').replace('instagram_dm', 'DM')
+      .replace('instagram_comentario', 'comentário IG').replace('_', ' ');
+    div.append(cb, el('span', 'who w-a', canal.toUpperCase().slice(0, 9)),
+      el('div', 'c', '<b>' + escapa(c.quem) + '</b><p>' +
+        escapa(c.ultima_msg_resumo || '') +
+        (c.dias != null ? ' · há ' + c.dias + ' dias' : '') + '</p>'));
+    C.append(div);
+  });
+
+  // ---- frentes ----
+  const F = $('#frentes'); const abertos = new Set(
+    [...F.querySelectorAll('details[open]')].map(d => d.dataset.slug));
+  F.textContent = '';
+  D.frentes.forEach(f => {
+    const b = BADGE[f.estado] || BADGE.pausado;
+    const d = el('details', 'f'); d.dataset.e = f.estado; d.dataset.slug = f.slug;
+    if (abertos.has(f.slug)) d.open = true;
+
+    const s = el('summary');
+    s.append(el('span', 'n', String(f.ordem).padStart(2, '0')),
+      el('div', 'tt', '<b>' + escapa(f.nome) + '</b><p>' + escapa(f.resumo || '') + '</p>'),
+      el('span', 'badge ' + b[0], f.dias_parada != null ? f.dias_parada + 'D PARADA' : b[1]));
+    d.append(s);
+
+    const inner = el('div', 'inner');
+    if (f.o_que_destrava)
+      inner.append(el('div', 'destrava', '<b>O QUE DESTRAVA</b>' + escapa(f.o_que_destrava)));
+
+    const ts = D.tasks.filter(t => t.frente_id === f.id);
+    if (ts.length) {
+      inner.append(el('div', 'sub', 'TAREFAS'));
+      const cx = el('div', 'box'); ts.forEach(t => cx.append(linhaTask(t))); inner.append(cx);
+    }
+
+    const evs = D.evidencias.filter(e => e.frente_id === f.id);
+    if (evs.length) {
+      inner.append(el('div', 'sub', 'O QUE SE SABE — E COMO'));
+      evs.forEach(e => {
+        const x = el('div', 'ev');
+        x.append(el('div', 'top',
+          '<b>' + escapa(e.afirmacao) + '</b>' +
+          '<span class="cf cf-' + e.confianca + '">' + e.confianca.toUpperCase() + '</span>'));
+        if (e.valor) x.append(el('div', 'val', escapa(e.valor)));
+        x.append(el('div', 'met', '<u>' + escapa(e.fonte) + '</u> · ' + escapa(e.metodo) +
+          ' · ' + escapa(e.quando) + ' por ' + escapa(e.verificado_por || '—')));
+        inner.append(x);
+      });
+    }
+
+    const cms = D.comentarios.filter(c => c.frente_id === f.id);
+    inner.append(el('div', 'sub', 'COMENTÁRIOS'));
+    cms.forEach(c => inner.append(el('div', 'cm',
+      '<i>' + escapa(c.autor).toUpperCase() + ' · ' + escapa(c.quando) + '</i>' + escapa(c.texto))));
+    inner.append(caixaComentario(f.id));
+
+    d.append(inner); F.append(d);
+  });
+}
+
+pinta();
+</script>
+</body>
+</html>
