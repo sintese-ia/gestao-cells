@@ -62,6 +62,9 @@ async function syncDM(pool, sysToken, limite = 40, orcamentoMs = 240000) {
   let url = `https://graph.facebook.com/${GRAPH}/${PAGE_ID}/conversations?` +
     new URLSearchParams({ access_token: tok, platform: 'instagram', fields: 'id', limit: 1 });
   let gravados = 0, lidas = 0, parouPor = 'fim da lista';
+  // MEDIDO EM 09/08: quando a paginação falha, a mesma página volta e a conversa seria
+  // contada de novo — a rodada dizia "11 gravados" com 1 linha no banco. O Set corta isso.
+  const vistos = new Set();
 
   // Grava CADA conversa assim que o id aparece, em vez de juntar tudo antes.
   // MEDIDO EM 09/08: a versão que paginava primeiro e gravava depois terminava com zero
@@ -77,6 +80,8 @@ async function syncDM(pool, sysToken, limite = 40, orcamentoMs = 240000) {
     if (!pagina) { parouPor = 'a Meta parou de responder'; break; }
 
     for (const cv of (pagina.data || [])) {
+      if (vistos.has(cv.id)) { parouPor = 'a paginação parou de avançar'; url = null; break; }
+      vistos.add(cv.id);
       lidas++;
       if (Date.now() > ate) break;
       await sleep(400);
