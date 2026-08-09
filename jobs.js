@@ -54,6 +54,20 @@ async function pageToken(sysToken) {
 }
 
 // ---------------------------------------------------------------- DM do Instagram
+// ⚠️ APOSENTADO EM 09/08 — não é mais agendado nem exposto em /api/job.
+//
+// Dois motivos, e o segundo é o que fecha a questão:
+//   1. A paginação de /conversations quebra na 2ª página (erro -2), então isto só
+//      alcançava a primeira conversa da caixa. Nunca foi capaz de varrer o inbox.
+//   2. A chave que ele grava é o thread id da Meta; o webhook grava
+//      `[sender.id, recipient.id].sort().join(':')`. Formatos diferentes para a MESMA
+//      conversa = duas linhas da mesma pessoa na tela de follow-up, uma pendente e
+//      outra resolvida. Numa tela cujo trabalho é mostrar quem espera resposta, isso
+//      é pior que não ter o dado.
+//
+// A coleta real agora é o webhook `messages`, que chega no comunidade-cells.
+// A função fica aqui como registro do que foi tentado — se um dia voltar a ser usada,
+// a chave PRECISA ser unificada com a do webhook antes.
 // Grava em jarvis.contato. `respondido` = a última mensagem foi NOSSA.
 // Se a última é deles, alguém está esperando — e é isso que a tela mostra.
 async function syncDM(pool, sysToken, limite = 40, orcamentoMs = 240000) {
@@ -189,7 +203,6 @@ function agendar(pool, env) {
       (agora.getHours() === HORA_ALVO && agora.getMinutes() >= MIN_ALVO);
     if (dia === ultimoDia || !passou) return;
     ultimoDia = dia;
-    if (env.META_TOKEN) await roda(pool, 'dm-instagram', () => syncDM(pool, env.META_TOKEN));
     await roda(pool, 'frentes-paradas', () => marcarParadas(pool));
     await roda(pool, 'purgar-bruto', () => purgarBruto(pool));
   };

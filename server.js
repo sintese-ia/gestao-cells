@@ -159,7 +159,6 @@ http.createServer(async (req, res) => {
     if (u.pathname === '/api/job' && req.method === 'POST') {
       const p = JSON.parse(await body(req) || '{}');
       const jobs = {
-        dm:      ['dm-instagram',    () => J.syncDM(pool, META_TOKEN)],
         paradas: ['frentes-paradas', () => J.marcarParadas(pool)],
         purgar:  ['purgar-bruto',    () => J.purgarBruto(pool)],
       };
