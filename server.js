@@ -9,6 +9,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { Pool } = require('pg');
 const Q = require('./queries');
+const J = require('./jobs');
 
 const PORT   = process.env.PORT || 3000;
 const SENHA  = process.env.SENHA || 'cells';
@@ -23,6 +24,8 @@ const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: false, max: 4, idleTimeoutMillis: 30000, statement_timeout: 30000,
 });
+
+const META_TOKEN = process.env.META_TOKEN || '';
 
 const TPL = fs.readFileSync(path.join(__dirname, 'template.html'), 'utf8');
 
@@ -149,6 +152,17 @@ http.createServer(async (req, res) => {
       return json(200, r.rows[0]);
     }
 
+    // ---- rodar um job na mão (o agendador roda sozinho às 06:40) ----
+    if (u.pathname === '/api/job' && req.method === 'POST') {
+      const p = JSON.parse(await body(req) || '{}');
+      if (p.job === 'dm')      { await J.roda(pool, 'dm-instagram',   () => J.syncDM(pool, META_TOKEN)); }
+      else if (p.job === 'paradas') { await J.roda(pool, 'frentes-paradas', () => J.marcarParadas(pool)); }
+      else return json(400, { erro: 'job desconhecido' });
+      const l = await pool.query(
+        'SELECT job,ok,detalhe,itens FROM jarvis.job_log ORDER BY id DESC LIMIT 1');
+      return json(200, l.rows[0]);
+    }
+
     // ---- a tela ----
     if (u.pathname === '/') {
       const d = await carrega();
@@ -167,4 +181,7 @@ http.createServer(async (req, res) => {
     res.end(`<meta charset="utf-8"><body style="background:#080C11;color:#F07A70;
       font:15px system-ui;padding:40px"><b>Erro no servidor</b><pre>${esc(e.message)}</pre>`);
   }
-}).listen(PORT, () => console.log('gestao-cells na porta', PORT));
+}).listen(PORT, () => {
+  console.log('gestao-cells na porta', PORT);
+  J.agendar(pool, { META_TOKEN });
+});
