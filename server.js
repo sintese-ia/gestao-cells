@@ -153,14 +153,27 @@ http.createServer(async (req, res) => {
     }
 
     // ---- rodar um job na mão (o agendador roda sozinho às 06:40) ----
+    // Dispara e responde na hora. A coleta de DM leva minutos — segurar a resposta
+    // até ela acabar fez o proxy do Easypanel devolver "service is not reachable"
+    // enquanto o job ainda rodava. O resultado sai no /api/jobs e em jarvis.job_log.
     if (u.pathname === '/api/job' && req.method === 'POST') {
       const p = JSON.parse(await body(req) || '{}');
-      if (p.job === 'dm')      { await J.roda(pool, 'dm-instagram',   () => J.syncDM(pool, META_TOKEN)); }
-      else if (p.job === 'paradas') { await J.roda(pool, 'frentes-paradas', () => J.marcarParadas(pool)); }
-      else return json(400, { erro: 'job desconhecido' });
-      const l = await pool.query(
-        'SELECT job,ok,detalhe,itens FROM jarvis.job_log ORDER BY id DESC LIMIT 1');
-      return json(200, l.rows[0]);
+      const jobs = {
+        dm:      ['dm-instagram',    () => J.syncDM(pool, META_TOKEN)],
+        paradas: ['frentes-paradas', () => J.marcarParadas(pool)],
+      };
+      const alvo = jobs[p.job];
+      if (!alvo) return json(400, { erro: 'job desconhecido' });
+      J.roda(pool, alvo[0], alvo[1]).catch(e => console.error('job solto:', e.message));
+      return json(202, { disparado: alvo[0], veja: '/api/jobs' });
+    }
+
+    // ---- últimas rodadas ----
+    if (u.pathname === '/api/jobs') {
+      const l = await pool.query(`SELECT job, ok, itens, detalhe,
+        to_char(rodou_em AT TIME ZONE 'America/Sao_Paulo','DD/MM HH24:MI') AS quando
+        FROM jarvis.job_log ORDER BY id DESC LIMIT 20`);
+      return json(200, l.rows);
     }
 
     // ---- a tela ----
