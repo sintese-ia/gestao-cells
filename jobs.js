@@ -185,13 +185,27 @@ async function purgarBruto(pool) {
 // prefiro um alarme grosseiro a nenhum.
 const SILENCIO_H = +process.env.ALARME_SILENCIO_HORAS || 48;
 
+// A purga só alcança `processado = true`. Uma linha que falhe na derivação de forma
+// persistente fica em false PARA SEMPRE, com o texto da DM dentro — a mesma brecha da
+// revogação, numa fatia menor. Purgar cego seria pior (perder o que falhou é o oposto
+// do motivo de guardar o cru), então o encalhe VIRA ALARME em vez de virar delete.
+const ENCALHE_DIAS = +process.env.ALARME_ENCALHE_DIAS || 3;
+
 async function checarWebhook(pool) {
   const r = await pool.query(
     `SELECT max(recebido_em) AS ultimo,
             round(extract(epoch from (now() - max(recebido_em)))/3600)::int AS horas,
-            count(*)::int AS total
-       FROM jarvis.webhook_bruto`);
-  const { ultimo, horas, total } = r.rows[0];
+            count(*)::int AS total,
+            count(*) FILTER (WHERE processado = false
+                         AND recebido_em < now() - ($1 || ' days')::interval)::int AS encalhados
+       FROM jarvis.webhook_bruto`, [ENCALHE_DIAS]);
+  const { ultimo, horas, total, encalhados } = r.rows[0];
+
+  if (encalhados > 0) {
+    const e = new Error(`${encalhados} payload(s) sem processar há mais de ${ENCALHE_DIAS} dias — `
+      + `a purga não os alcança e o texto da DM segue lá dentro. Reprocessar ou descartar na mão.`);
+    e.alarme = true; throw e;
+  }
   if (!ultimo) {
     const e = new Error(`nenhuma entrega da Meta desde que o webhook passou a gravar o cru`);
     e.alarme = true; throw e;
@@ -200,7 +214,7 @@ async function checarWebhook(pool) {
     const e = new Error(`${horas}h sem entrega da Meta (limite ${SILENCIO_H}h) — pode ser silêncio real ou canal quebrado`);
     e.alarme = true; throw e;
   }
-  return { itens: total, detalhe: `última entrega há ${horas}h · limite ${SILENCIO_H}h` };
+  return { itens: total, detalhe: `última entrega há ${horas}h · limite ${SILENCIO_H}h · 0 encalhados` };
 }
 
 // ---------------------------------------------------------------- agendador
