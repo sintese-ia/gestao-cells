@@ -161,6 +161,7 @@ http.createServer(async (req, res) => {
       const jobs = {
         dm:      ['dm-instagram',    () => J.syncDM(pool, META_TOKEN)],
         paradas: ['frentes-paradas', () => J.marcarParadas(pool)],
+        purgar:  ['purgar-bruto',    () => J.purgarBruto(pool)],
       };
       const alvo = jobs[p.job];
       if (!alvo) return json(400, { erro: 'job desconhecido' });

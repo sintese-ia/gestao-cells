@@ -140,6 +140,27 @@ async function marcarParadas(pool) {
   return { itens: r.rowCount, detalhe: r.rows.map(x => x.slug).join(', ') || 'nenhuma' };
 }
 
+// ---------------------------------------------------------------- retenção do cru
+// O `webhook_bruto` guarda o payload INTEIRO da Meta, com o texto das DMs dentro.
+// Sem isso aqui, o argumento de que "revogar a decisão sobre conteúdo é um UPDATE numa
+// coluna" seria falso — o texto continuaria vivo no cru para sempre. A retenção é o que
+// torna a revogação real: apaga a coluna e espera a janela virar.
+//
+// 14 dias é o suficiente para reprocessar uma falha e curto o bastante para não virar
+// um arquivo de conversas de cliente que ninguém sabe que existe.
+const RETENCAO_DIAS = +process.env.RETENCAO_BRUTO_DIAS || 14;
+
+async function purgarBruto(pool) {
+  const r = await pool.query(
+    `DELETE FROM jarvis.webhook_bruto
+      WHERE processado = true AND recebido_em < now() - ($1 || ' days')::interval`,
+    [RETENCAO_DIAS]);
+  const pend = await pool.query(
+    `SELECT count(*)::int n FROM jarvis.webhook_bruto WHERE processado = false`);
+  return { itens: r.rowCount,
+           detalhe: `retenção ${RETENCAO_DIAS}d · ${pend.rows[0].n} ainda não processados` };
+}
+
 // ---------------------------------------------------------------- agendador
 async function roda(pool, nome, fn) {
   try {
@@ -170,6 +191,7 @@ function agendar(pool, env) {
     ultimoDia = dia;
     if (env.META_TOKEN) await roda(pool, 'dm-instagram', () => syncDM(pool, env.META_TOKEN));
     await roda(pool, 'frentes-paradas', () => marcarParadas(pool));
+    await roda(pool, 'purgar-bruto', () => purgarBruto(pool));
   };
 
   setInterval(tick, 10 * 60 * 1000).unref();
@@ -177,4 +199,4 @@ function agendar(pool, env) {
   console.log('agendador ligado · alvo 06:40 America/Sao_Paulo');
 }
 
-module.exports = { agendar, syncDM, marcarParadas, roda };
+module.exports = { agendar, syncDM, marcarParadas, purgarBruto, roda };
