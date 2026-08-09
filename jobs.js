@@ -56,58 +56,63 @@ async function pageToken(sysToken) {
 // ---------------------------------------------------------------- DM do Instagram
 // Grava em jarvis.contato. `respondido` = a última mensagem foi NOSSA.
 // Se a última é deles, alguém está esperando — e é isso que a tela mostra.
-async function syncDM(pool, sysToken, limite = 40) {
+async function syncDM(pool, sysToken, limite = 40, orcamentoMs = 240000) {
+  const ate = Date.now() + orcamentoMs;
   const tok = await pageToken(sysToken);
-  const convs = [];
-  let pagina = await graph(`${PAGE_ID}/conversations`,
-    { access_token: tok, platform: 'instagram', fields: 'id', limit: 1 });
+  let url = `https://graph.facebook.com/${GRAPH}/${PAGE_ID}/conversations?` +
+    new URLSearchParams({ access_token: tok, platform: 'instagram', fields: 'id', limit: 1 });
+  let gravados = 0, lidas = 0, parouPor = 'fim da lista';
 
-  while (pagina) {
-    convs.push(...(pagina.data || []));
-    const prox = pagina.paging && pagina.paging.next;
-    if (!prox || convs.length >= limite) break;
-    await sleep(900);
-    let r = null;
-    for (let i = 0; i < 3 && !r; i++) {       // a paginação também engasga; tenta de novo
-      const x = await req(prox).catch(() => ({ error: { code: -2 } }));
-      if (!x.error) r = x; else await sleep(2000 * (i + 1));
+  // Grava CADA conversa assim que o id aparece, em vez de juntar tudo antes.
+  // MEDIDO EM 09/08: a versão que paginava primeiro e gravava depois terminava com zero
+  // no banco sempre que a paginação engasgava no meio — e ela engasga com frequência.
+  while (url && gravados < limite) {
+    if (Date.now() > ate) { parouPor = 'orçamento de tempo'; break; }
+
+    let pagina = null;
+    for (let i = 0; i < 3 && !pagina; i++) {
+      const x = await req(url).catch(() => ({ error: { code: -2, message: 'rede' } }));
+      if (!x.error) pagina = x; else await sleep(2000 * (i + 1));
     }
-    if (!r) break;                            // desistiu: fica com o que já veio
-    pagina = r;
+    if (!pagina) { parouPor = 'a Meta parou de responder'; break; }
+
+    for (const cv of (pagina.data || [])) {
+      lidas++;
+      if (Date.now() > ate) break;
+      await sleep(400);
+      let d;
+      try {
+        d = await graph(cv.id, { access_token: tok,
+          fields: 'messages.limit(1){created_time,from,message}' });
+      } catch { continue; }              // uma conversa ruim não derruba a coleta
+
+      const m = ((d.messages || {}).data || [])[0];
+      if (!m) continue;
+      const quem = (m.from || {}).username || (m.from || {}).id || 'desconhecido';
+      const meu  = quem.toLowerCase() === EU;
+      const txt  = (m.message || '').replace(/\s+/g, ' ').trim().slice(0, 180);
+
+      // ON CONFLICT pela chave da conversa: rodar duas vezes não duplica ninguém.
+      // Só mexe em `respondido` quando a última mensagem MUDOU — assim a marcação
+      // que o Gabriel fez na tela não é desfeita pela próxima rodada.
+      await pool.query(`
+        INSERT INTO jarvis.contato (chave, quem, handle, canal, ultima_msg_em, ultima_msg_resumo, respondido)
+        VALUES ($1,$2,$3,'instagram_dm',$4,$5,$6)
+        ON CONFLICT (chave) DO UPDATE SET
+          ultima_msg_em     = EXCLUDED.ultima_msg_em,
+          ultima_msg_resumo = EXCLUDED.ultima_msg_resumo,
+          respondido        = CASE
+            WHEN jarvis.contato.ultima_msg_em IS DISTINCT FROM EXCLUDED.ultima_msg_em
+            THEN EXCLUDED.respondido ELSE jarvis.contato.respondido END`,
+        [cv.id, meu ? 'Cells (última foi nossa)' : quem, meu ? null : quem,
+         m.created_time || null, txt || '(mídia ou reação)', meu]);
+      gravados++;
+    }
+
+    url = (pagina.paging && pagina.paging.next) || null;
+    if (url) await sleep(900);
   }
-
-  let gravados = 0;
-  for (const cv of convs) {
-    await sleep(400);
-    let d;
-    try {
-      d = await graph(cv.id, { access_token: tok,
-        fields: 'messages.limit(1){created_time,from,message}' });
-    } catch { continue; }                     // uma conversa ruim não derruba a coleta
-
-    const m = ((d.messages || {}).data || [])[0];
-    if (!m) continue;
-    const quem = (m.from || {}).username || (m.from || {}).id || 'desconhecido';
-    const meu  = quem.toLowerCase() === EU;
-    const txt  = (m.message || '').replace(/\s+/g, ' ').trim().slice(0, 180);
-
-    // ON CONFLICT pela chave da conversa: rodar duas vezes não duplica ninguém.
-    // Não sobrescreve `respondido` se o Gabriel já marcou à mão DEPOIS da última mensagem —
-    // marcação humana ganha da automática, sempre.
-    await pool.query(`
-      INSERT INTO jarvis.contato (chave, quem, handle, canal, ultima_msg_em, ultima_msg_resumo, respondido)
-      VALUES ($1,$2,$3,'instagram_dm',$4,$5,$6)
-      ON CONFLICT (chave) DO UPDATE SET
-        ultima_msg_em     = EXCLUDED.ultima_msg_em,
-        ultima_msg_resumo = EXCLUDED.ultima_msg_resumo,
-        respondido        = CASE
-          WHEN jarvis.contato.ultima_msg_em IS DISTINCT FROM EXCLUDED.ultima_msg_em
-          THEN EXCLUDED.respondido ELSE jarvis.contato.respondido END`,
-      [cv.id, meu ? 'Cells (última foi nossa)' : quem, meu ? null : quem,
-       m.created_time || null, txt || '(mídia ou reação)', meu]);
-    gravados++;
-  }
-  return { itens: gravados, detalhe: `${convs.length} conversas lidas` };
+  return { itens: gravados, detalhe: `${lidas} conversas lidas · parou por: ${parouPor}` };
 }
 
 // ---------------------------------------------------------------- frentes paradas
