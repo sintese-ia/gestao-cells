@@ -19,6 +19,9 @@ const DONOS  = ['gabriel', 'claude', 'ambos'];
 // Os únicos estados que uma task pode ter. O servidor recusa qualquer outro:
 // estado livre vira dialeto pessoal e quebra todo filtro depois.
 const ESTADOS = ['aberta', 'fazendo', 'feita', 'descartada', 'bloqueada'];
+// Tipo = a natureza do trabalho, nao o assunto. E o que responde "isso e um clique
+// ou uma decisao?" — a pergunta que de fato organiza o dia.
+const TIPOS = ['clique','decisao','pessoas','papelada','campo','producao','construcao','pesquisa'];
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -28,6 +31,10 @@ const pool = new Pool({
 const META_TOKEN = process.env.META_TOKEN || '';
 
 const TPL = fs.readFileSync(path.join(__dirname, 'template.html'), 'utf8');
+// Impressao digital do que ESTE container serve. Existe porque "HTTP 200" nao prova
+// deploy: o container antigo responde 200 igualzinho. O deploy compara este hash com
+// o do arquivo local — se bater, o codigo novo esta no ar; se nao, o build nao trocou.
+const VERSAO = crypto.createHash('sha256').update(TPL).digest('hex').slice(0, 8);
 
 // pg devolve date como objeto e numeric como string; o template espera algo previsível
 function normaliza(row) {
@@ -98,7 +105,7 @@ http.createServer(async (req, res) => {
   };
 
   if (u.pathname === '/healthz') {
-    res.writeHead(200, { 'content-type': 'text/plain' }); return res.end('ok');
+    res.writeHead(200, { 'content-type': 'text/plain' }); return res.end('ok ' + VERSAO);
   }
 
   // ---- parede de senha ----
@@ -131,6 +138,24 @@ http.createServer(async (req, res) => {
       if (!p.id || !ESTADOS.includes(p.estado)) return json(400, { erro: 'id ou estado inválido' });
       const r = await pool.query(Q.setTask, [p.id, p.estado]);
       if (!r.rowCount) return json(404, { erro: 'task não encontrada' });
+      return json(200, r.rows[0]);
+    }
+
+    // ---- prioridade / tipo ----
+    if (u.pathname === '/api/prioridade' && req.method === 'POST') {
+      const p = JSON.parse(await body(req) || '{}');
+      if (!p.id || ![1,2,3,4].includes(Number(p.prioridade)))
+        return json(400, { erro: 'prioridade deve ser 1, 2, 3 ou 4' });
+      const r = await pool.query(Q.setPrioridade, [p.id, Number(p.prioridade)]);
+      if (!r.rowCount) return json(404, { erro: 'task nao encontrada' });
+      return json(200, r.rows[0]);
+    }
+
+    if (u.pathname === '/api/tipo' && req.method === 'POST') {
+      const p = JSON.parse(await body(req) || '{}');
+      if (!p.id || !TIPOS.includes(p.tipo)) return json(400, { erro: 'tipo invalido' });
+      const r = await pool.query(Q.setTipo, [p.id, p.tipo]);
+      if (!r.rowCount) return json(404, { erro: 'task nao encontrada' });
       return json(200, r.rows[0]);
     }
 

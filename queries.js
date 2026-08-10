@@ -17,11 +17,12 @@ module.exports = {
   // para conseguir DESMARCAR um check dado por engano.
   tasks: `
     SELECT t.id, t.frente_id, t.titulo, t.detalhe, t.dono, t.estado, t.prazo, t.origem,
+           coalesce(t.prioridade,3) AS prioridade, coalesce(t.tipo,'construcao') AS tipo,
            to_char(t.feita_em AT TIME ZONE 'America/Sao_Paulo','DD/MM') AS feita
       FROM jarvis.task t
      WHERE t.estado IN ('aberta','fazendo','bloqueada')
         OR t.feita_em > now() - interval '7 days'
-     ORDER BY (t.dono='gabriel') DESC, t.id`,
+     ORDER BY coalesce(t.prioridade,3), (t.dono='gabriel') DESC, t.id`,
 
   // Evidências: o que se sabe E como se sabe. É o que impede uma conclusão
   // errada de virar fato permanente só porque foi escrita uma vez.
@@ -63,6 +64,16 @@ module.exports = {
            feita_em = CASE WHEN $2 = 'feita' THEN now() ELSE NULL END
      WHERE id = $1
     RETURNING id, estado`,
+
+  // Prioridade e tipo sao editaveis pela tela: a ordem de fazer as coisas muda
+  // toda semana, e um campo que so o Claude escreve fica desatualizado em dois dias.
+  setPrioridade: `
+    UPDATE jarvis.task SET prioridade = $2 WHERE id = $1
+    RETURNING id, prioridade`,
+
+  setTipo: `
+    UPDATE jarvis.task SET tipo = $2 WHERE id = $1
+    RETURNING id, tipo`,
 
   addComentario: `
     INSERT INTO jarvis.comentario (frente_id, task_id, autor, texto)

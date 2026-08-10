@@ -15,7 +15,7 @@ set -euo pipefail
 : "${EASYPANEL_API_TOKEN:?defina EASYPANEL_API_TOKEN (está no ~/.zshrc)}"
 BASE="https://easypanel.sinteseia.com.br/api/trpc"
 PROJ="sintese"
-SVC="gestao-cells"
+SVC="gestao"   # nome do servico no Easypanel. NAO e "gestao-cells" (o repo se chama assim, o servico nao)
 
 ep() {
   curl -sS -X POST "$BASE/$1" \
@@ -44,13 +44,17 @@ echo "==> 3/3 deploy"
 ep "services.app.deployService" "{\"json\":{\"projectName\":\"$PROJ\",\"serviceName\":\"$SVC\"}}"
 
 echo
-echo "==> aguardando subir (build leva ~1-2 min)"
+# HTTP 200 NAO prova deploy: a tela de login do container antigo responde 200 igual.
+# O /healthz devolve o hash do template servido — so isso prova que o codigo novo subiu.
+ESPERADO=$(shasum -a 256 template.html | cut -c1-8)
+echo "==> aguardando o hash $ESPERADO aparecer em /healthz (build leva ~1-2 min)"
 for i in $(seq 1 40); do
-  c=$(curl -k -s -o /dev/null -w '%{http_code}' -m 10 https://gestao-cells.sinteseia.com.br || true)
-  # 401 = app no ar pedindo senha. É o resultado que queremos.
-  if [ "$c" = "401" ]; then echo "no ar → https://gestao-cells.sinteseia.com.br"; exit 0; fi
-  printf '  %02d) HTTP %s\n' "$i" "$c"
+  h=$(curl -k -s -m 10 https://jarvis.sinteseia.com.br/healthz || true)
+  if [ "$h" = "ok $ESPERADO" ]; then
+    echo "no ar e confirmado → https://jarvis.sinteseia.com.br"; exit 0; fi
+  printf '  %02d) %s\n' "$i" "${h:-sem resposta}"
   sleep 15
 done
-echo "não subiu no tempo esperado — veja os logs do serviço no painel."
+echo "o hash nao bateu no tempo esperado — o container antigo pode continuar servindo."
+echo "veja os logs do servico 'gestao' no Easypanel."
 exit 1
