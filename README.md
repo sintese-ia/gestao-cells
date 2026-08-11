@@ -17,6 +17,16 @@ Três visões da mesma lista, alternadas pelas abas no topo:
   produção, pesquisa, construção), não o assunto. Clicar numa folha leva à tarefa na lista.
 - **Frentes** — cada frente com o que destrava, tarefas, comentários e as evidências.
 
+### Fechar comentando
+
+Marcar uma tarefa abre, na hora, um campo: **"o que você fez — e o que eu devo conferir depois"**.
+O comentário fica preso na **tarefa** (`jarvis.comentario.task_id`), não solto na frente.
+
+A fila de conferência é a view `jarvis.vw_para_conferir`: entram as tarefas fechadas
+com comentário do Gabriel que ainda não receberam resposta minha, ordenadas por quem
+espera há mais tempo. Ela se esvazia sozinha quando eu comento de volta — sem flag
+para alguém lembrar de marcar.
+
 O filtro **"só o que depende de mim"** vem ligado: o painel é do Gabriel, e a pergunta
 que ele faz ao abrir não é "o que existe", é "o que trava em mim".
 

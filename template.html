@@ -163,6 +163,14 @@
   .t .mv button:hover{border-color:var(--arc);color:var(--arc)}
   .t .mv button:disabled{opacity:.25;cursor:default}
 
+  /* ---- comentario de fechamento, dentro da tarefa ---- */
+  .tc{grid-column:1/-1;margin:8px 0 2px 28px}
+  .tc .cm{background:var(--void);border:1px solid var(--line);border-left:2px solid var(--grn)}
+  .tc .add input{background:var(--card)}
+  .tc .dica{font:9.5px var(--mono);letter-spacing:.1em;color:var(--ink3);margin-bottom:6px}
+  .t{flex-wrap:wrap}
+  .t .full{flex-basis:100%}
+
   .vazio{color:var(--ink3);font-size:13.5px;padding:12px 15px}
   #flash{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:var(--arc);
     color:var(--void);font:600 13px system-ui;padding:9px 18px;border-radius:3px;opacity:0;
@@ -293,7 +301,9 @@ function linhaTask(t) {
       t.estado = cb.checked ? 'feita' : 'aberta';
       div.classList.toggle('ok', cb.checked);
       flash(cb.checked ? 'Marcado como feito' : 'Reaberto');
-      pinta();
+      // Marcar sozinho perde o COMO. Ao fechar, a caixa abre na hora e ja foca —
+      // e o que voce escreve aqui e o que eu leio depois pra conferir.
+      if (cb.checked) { abreComentario(t, div, true); } else { pinta(); }
     } catch (e) { cb.checked = !cb.checked; flash(e.message, true); }
     finally { cb.disabled = false; }
   });
@@ -326,7 +336,59 @@ function linhaTask(t) {
   div.append(cb, el('span', 'who ' + d[0], d[1]), chip,
     el('div', 'c', '<b>' + escapa(t.titulo) + '</b>' +
       (t.detalhe ? '<p>' + escapa(t.detalhe) + '</p>' : '')), mv);
+
+  // comentarios ja escritos nesta tarefa aparecem sempre, fechada ou nao
+  const meus = D.comentarios.filter(x => x.task_id === t.id);
+  if (meus.length) {
+    const zona = el('div', 'tc full');
+    meus.forEach(x => zona.append(el('div', 'cm',
+      '<i>' + escapa(x.autor).toUpperCase() + ' · ' + escapa(x.quando) + '</i>' + escapa(x.texto))));
+    div.append(zona);
+  }
+  // botao discreto pra comentar sem precisar fechar a tarefa
+  const bc = el('button', null, meus.length ? '+ comentar' : 'comentar');
+  bc.type = 'button';
+  bc.style.cssText = 'background:none;border:0;color:var(--ink3);font:9.5px var(--mono);'
+    + 'letter-spacing:.1em;cursor:pointer;padding:2px 0;margin-left:28px';
+  bc.addEventListener('click', () => abreComentario(t, div, false));
+  const rodape = el('div', 'full'); rodape.append(bc); div.append(rodape);
   return div;
+}
+
+// Caixa de comentario de uma TAREFA. Aparece ao fechar (com dica de fechamento)
+// ou sob demanda. Nao repinta a tela sozinha: repintar apagaria o que voce esta digitando.
+function abreComentario(t, linha, aoFechar) {
+  if (linha.querySelector('.tc-add')) {
+    linha.querySelector('.tc-add input').focus(); return;
+  }
+  const zona = el('div', 'tc tc-add full');
+  if (aoFechar) zona.append(el('div', 'dica',
+    'O QUE VOCÊ FEZ — E O QUE EU DEVO CONFERIR DEPOIS'));
+  const box = el('div', 'add');
+  const inp = el('input');
+  inp.placeholder = aoFechar ? 'Ex: reconectei a credencial, confere se o fluxo voltou a rodar'
+                             : 'Comentário nesta tarefa…';
+  inp.setAttribute('aria-label', 'Comentário na tarefa ' + t.id);
+  const bt = el('button', null, 'SALVAR');
+  const enviar = async () => {
+    const texto = inp.value.trim();
+    if (!texto) { zona.remove(); return; }
+    bt.disabled = true;
+    try {
+      await post('/api/comentario', { task_id: t.id, frente_id: t.frente_id, texto });
+      D.comentarios.push({ frente_id: t.frente_id, task_id: t.id, autor: 'gabriel', texto,
+        quando: new Date().toLocaleString('pt-BR', { day:'2-digit', month:'2-digit',
+          hour:'2-digit', minute:'2-digit' }).replace(',', '') });
+      flash('Comentário salvo na tarefa'); pinta();
+    } catch (e) { flash(e.message, true); bt.disabled = false; }
+  };
+  bt.addEventListener('click', enviar);
+  inp.addEventListener('keydown', e => {
+    if (e.key === 'Enter') enviar();
+    if (e.key === 'Escape') { zona.remove(); }
+  });
+  box.append(inp, bt); zona.append(box);
+  linha.append(zona); inp.focus();
 }
 
 // ---- legenda: sem ela a cor e enfeite, nao informacao ----

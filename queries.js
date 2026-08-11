@@ -34,6 +34,8 @@ module.exports = {
      ORDER BY array_position(ARRAY['refutado','hipotese','provavel','confirmado'], e.confianca),
               e.verificado_em DESC`,
 
+  // task_id importa tanto quanto frente_id: o comentario de fechamento ("fiz assim,
+  // confere isso") fica preso na tarefa, nao solto na frente.
   comentarios: `
     SELECT c.id, c.frente_id, c.task_id, c.autor, c.texto,
            to_char(c.criado_em AT TIME ZONE 'America/Sao_Paulo','DD/MM HH24:MI') AS quando
