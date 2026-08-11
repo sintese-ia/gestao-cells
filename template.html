@@ -151,6 +151,21 @@
     background:var(--card2);border-left:2px solid currentColor;cursor:pointer;text-align:left;
     width:100%;font:inherit;color:inherit;border-top:0;border-right:0;border-bottom:0}
   .folha:hover{background:#E8EEF4}
+  /* pausa e peso */
+  .pw{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:8px 14px 12px 52px;
+      border-bottom:1px solid var(--line);background:var(--card2)}
+  .pw label{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink3)}
+  .pw select{font:inherit;font-size:12px;padding:3px 6px;border:1px solid var(--line);
+             border-radius:6px;background:var(--card);color:var(--ink)}
+  .alerta-peso{font-size:11px;color:var(--amb);font-weight:600}
+  .espera{padding:10px 14px 12px 52px;border-bottom:1px solid var(--line);background:#FAF0DB}
+  .espera b{display:block;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--amb)}
+  .espera p{margin:4px 0 0;font-size:12.5px;color:var(--ink2)}
+  .fpausa{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px}
+  .fpausa input[type=text]{flex:1 1 260px;font:inherit;font-size:12.5px;padding:6px 8px;
+    border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink)}
+  .fpausa input[type=date]{font:inherit;font-size:12.5px;padding:6px 8px;border:1px solid var(--line);
+    border-radius:6px;background:var(--card);color:var(--ink)}
   .folha .fid{font:600 9px/1.5 var(--mono);color:var(--ink3);flex:none}
   .folha .ftx{font-size:13px;color:var(--ink);flex:1;min-width:0}
   .folha .fp{font:600 8.5px/1.5 var(--mono);flex:none;letter-spacing:.08em}
@@ -323,6 +338,11 @@ const PRIOS = {
 const V = { aba: 'prio', soMinhas: true, verFeitas: false };
 const meu = t => t.dono === 'gabriel' || t.dono === 'ambos';
 const aberta = t => t.estado === 'aberta' || t.estado === 'fazendo' || t.estado === 'bloqueada';
+// Pausada NAO e aberta e NAO e feita. Fica fora das faixas P1-P4 de proposito:
+// o valor de pausar e sumir do campo de visao sem sumir do mundo.
+const emEspera = t => t.estado === 'em_espera';
+// Alta complexidade + baixo impacto: o quadrante que o Gabriel pediu para enxergar.
+const pesada = t => Number(t.esforco) >= 3 && Number(t.impacto) <= 2 && t.impacto != null;
 const visivel = t => (V.verFeitas ? true : aberta(t)) && (V.soMinhas ? meu(t) : true);
 const BADGE = { critico: ['b-red','CRÍTICO'], andando: ['b-amb','ANDANDO'],
                 pronto: ['b-grn','PRONTO'], sem_contexto: ['b-off','SEM CONTEXTO'],
@@ -371,11 +391,58 @@ function linhaTask(t) {
   desce.addEventListener('click', () => mexe(1, desce));
   sobe.disabled = Number(t.prioridade) <= 1;
   desce.disabled = Number(t.prioridade) >= 4;
-  mv.append(sobe, desce);
+  const pausa = el('button', null, emEspera(t) ? '▶' : '⏸');
+  pausa.title = emEspera(t) ? 'Retomar' : 'Pôr em espera';
+  pausa.setAttribute('aria-label', (emEspera(t) ? 'Retomar: ' : 'Pôr em espera: ') + t.titulo);
+  pausa.addEventListener('click', async () => {
+    if (emEspera(t)) {
+      pausa.disabled = true;
+      try { await post('/api/retomar', { id: t.id });
+        t.estado = 'aberta'; flash('De volta para a lista'); pinta(); }
+      catch (e) { flash(e.message, true); pausa.disabled = false; }
+      return;
+    }
+    formPausa(t, div);
+  });
+  mv.append(sobe, desce, pausa);
 
   div.append(cb, el('span', 'who ' + d[0], d[1]), chip,
     el('div', 'c', '<b>' + escapa(t.titulo) + '</b>' +
       (t.detalhe ? '<p>' + escapa(t.detalhe) + '</p>' : '')), mv);
+
+  if (emEspera(t)) {
+    const zz = el('div', 'espera',
+      '<b>Em espera' + (t.revisar ? ' · rever em ' + escapa(t.revisar) : ' · sem data de revisão') + '</b>' +
+      '<p>' + escapa(t.por_que_espera || '—') + '</p>');
+    div.append(zz);
+  }
+
+  // Esforço x impacto: o par que responde "isso é complexo e rende pouco?".
+  // Fica sempre visível porque julgamento que exige clique para aparecer não é feito.
+  const pw = el('div', 'pw');
+  const mkSel = (campo, atual, rotulos) => {
+    const sl = document.createElement('select');
+    sl.setAttribute('aria-label', campo + ' de: ' + t.titulo);
+    sl.append(new Option('—', ''));
+    rotulos.forEach((r, i) => sl.append(new Option(r, String(i + 1))));
+    sl.value = atual == null ? '' : String(atual);
+    sl.addEventListener('change', async () => {
+      const antes = { esforco: t.esforco, impacto: t.impacto };
+      t[campo] = sl.value === '' ? null : Number(sl.value);
+      try {
+        await post('/api/peso', { id: t.id, esforco: t.esforco, impacto: t.impacto });
+        flash('Anotado'); pinta();
+      } catch (e) { t.esforco = antes.esforco; t.impacto = antes.impacto; flash(e.message, true); pinta(); }
+    });
+    return sl;
+  };
+  pw.append(el('label', null, 'esforço'),
+            mkSel('esforco', t.esforco, ['minutos', 'horas', 'dias', 'semanas']),
+            el('label', null, 'impacto'),
+            mkSel('impacto', t.impacto, ['cosmético', 'ajuda', 'move o ponteiro', 'destrava dinheiro']));
+  if (pesada(t) && !emEspera(t))
+    pw.append(el('span', 'alerta-peso', '⚠ complexa e de pouco impacto — candidata a pausa'));
+  div.append(pw);
 
   // comentarios ja escritos nesta tarefa aparecem sempre, fechada ou nao
   const meus = D.comentarios.filter(x => x.task_id === t.id);
@@ -495,6 +562,39 @@ function irPara(id) {
   setTimeout(() => { alvo.style.background = ''; }, 1600);
 }
 
+// Pausar pede duas coisas e nao aceita menos: POR QUE e QUANDO REVER.
+// Pausa sem motivo escrito e abandono com cara de decisao; pausa sem data
+// e gaveta. O padrao de 14 dias existe para o campo nunca sair vazio.
+function formPausa(t, div) {
+  if (div.querySelector('.fpausa')) return;
+  const zona = el('div', 'espera');
+  zona.append(el('b', null, 'Pôr em espera'));
+  const f = el('div', 'fpausa');
+  const motivo = document.createElement('input');
+  motivo.type = 'text'; motivo.placeholder = 'por que não agora?';
+  motivo.setAttribute('aria-label', 'Motivo da pausa: ' + t.titulo);
+  const quando = document.createElement('input');
+  quando.type = 'date';
+  quando.setAttribute('aria-label', 'Rever em: ' + t.titulo);
+  const d = new Date(); d.setDate(d.getDate() + 14);
+  quando.value = d.toISOString().slice(0, 10);
+  const ok = el('button', 'bt', 'Pausar');
+  const nao = el('button', null, 'cancelar');
+  nao.addEventListener('click', () => zona.remove());
+  ok.addEventListener('click', async () => {
+    const txt = motivo.value.trim();
+    if (txt.length < 3) { motivo.focus(); flash('Escreva o motivo', true); return; }
+    ok.disabled = true;
+    try {
+      const r = await post('/api/espera', { id: t.id, por_que: txt, revisar_em: quando.value });
+      t.estado = 'em_espera'; t.por_que_espera = txt; t.revisar = r.revisar;
+      flash('Em espera' + (r.revisar ? ' até ' + r.revisar : '')); pinta();
+    } catch (e) { flash(e.message, true); ok.disabled = false; }
+  });
+  f.append(motivo, quando, ok, nao);
+  zona.append(f); div.append(zona); motivo.focus();
+}
+
 // ---- LISTA por prioridade ----
 function pintaListas() {
   const L = $('#listas'); L.textContent = '';
@@ -512,6 +612,22 @@ function pintaListas() {
     desse.forEach(t => { const ln = linhaTask(t); ln.id = 'task-' + t.id; cx.append(ln); });
     L.append(cx);
   });
+
+  // Em espera fica no fim e fora das faixas: sair da frente e o ponto de pausar.
+  // Mas continua na MESMA tela — gaveta em outra aba e onde trabalho vai morrer.
+  const paradas = D.tasks.filter(t => emEspera(t) && (V.soMinhas ? meu(t) : true));
+  if (paradas.length) {
+    const vencidas = paradas.filter(t => t.dias_ate_revisar != null && t.dias_ate_revisar <= 0).length;
+    const fx = el('div', 'faixa');
+    const bb = el('b', null, 'EM ESPERA'); bb.className = 'p4';
+    fx.append(bb, el('span', null, paradas.length + ''),
+      el('em', null, vencidas ? vencidas + ' já passou da data de rever' : 'pausadas de propósito, com data para voltar'));
+    L.append(fx);
+    const cx = el('div', 'box');
+    paradas.sort((a, b) => (a.dias_ate_revisar ?? 9999) - (b.dias_ate_revisar ?? 9999))
+      .forEach(t => { const ln = linhaTask(t); ln.id = 'task-' + t.id; cx.append(ln); });
+    L.append(cx);
+  }
 }
 
 function caixaComentario(frenteId) {

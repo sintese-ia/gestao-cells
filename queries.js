@@ -19,9 +19,13 @@ module.exports = {
   tasks: `
     SELECT t.id, t.frente_id, t.titulo, t.detalhe, t.dono, t.estado, t.prazo, t.origem,
            coalesce(t.prioridade,3) AS prioridade, coalesce(t.tipo,'construcao') AS tipo,
+           t.esforco, t.impacto, t.por_que_espera,
+           to_char(t.revisar_em,'DD/MM') AS revisar,
+           CASE WHEN t.revisar_em IS NOT NULL
+                THEN (t.revisar_em - CURRENT_DATE) END AS dias_ate_revisar,
            to_char(t.feita_em AT TIME ZONE 'America/Sao_Paulo','DD/MM') AS feita
       FROM jarvis.task t
-     WHERE t.estado IN ('aberta','fazendo','bloqueada')
+     WHERE t.estado IN ('aberta','fazendo','bloqueada','em_espera')
         OR t.feita_em > now() - interval '7 days'
      ORDER BY coalesce(t.prioridade,3), (t.dono='gabriel') DESC, t.id`,
 
@@ -81,6 +85,26 @@ module.exports = {
   setTipo: `
     UPDATE jarvis.task SET tipo = $2 WHERE id = $1
     RETURNING id, tipo`,
+
+  // Parar de propria vontade nao e o mesmo que estar bloqueado: 'bloqueada' é
+  // esperar terceiro, 'em_espera' é decisao de nao fazer agora. Sem motivo e sem
+  // data de revisao vira gaveta — por isso os dois campos entram no mesmo UPDATE.
+  setEspera: `
+    UPDATE jarvis.task
+       SET estado = 'em_espera', feita_em = NULL,
+           por_que_espera = $2, revisar_em = $3
+     WHERE id = $1
+    RETURNING id, estado, por_que_espera, to_char(revisar_em,'DD/MM') AS revisar`,
+
+  retomar: `
+    UPDATE jarvis.task SET estado = 'aberta' WHERE id = $1
+    RETURNING id, estado`,
+
+  // Esforco x impacto existe para responder "alta complexidade e baixo impacto?"
+  // sem depender de memoria. O par vive na tarefa; o julgamento e do Gabriel.
+  setPeso: `
+    UPDATE jarvis.task SET esforco = $2, impacto = $3 WHERE id = $1
+    RETURNING id, esforco, impacto`,
 
   addComentario: `
     INSERT INTO jarvis.comentario (frente_id, task_id, autor, texto)

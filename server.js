@@ -18,7 +18,7 @@ const TOKEN  = crypto.createHash('sha256').update('gc|' + SENHA).digest('hex').s
 const DONOS  = ['gabriel', 'claude', 'ambos'];
 // Os únicos estados que uma task pode ter. O servidor recusa qualquer outro:
 // estado livre vira dialeto pessoal e quebra todo filtro depois.
-const ESTADOS = ['aberta', 'fazendo', 'feita', 'descartada', 'bloqueada'];
+const ESTADOS = ['aberta', 'fazendo', 'feita', 'descartada', 'bloqueada', 'em_espera'];
 // Tipo = a natureza do trabalho, nao o assunto. E o que responde "isso e um clique
 // ou uma decisao?" — a pergunta que de fato organiza o dia.
 const TIPOS = ['clique','decisao','pessoas','papelada','campo','producao','construcao','pesquisa'];
@@ -144,6 +144,41 @@ http.createServer(async (req, res) => {
       const p = JSON.parse(await body(req) || '{}');
       if (!p.id || !ESTADOS.includes(p.estado)) return json(400, { erro: 'id ou estado inválido' });
       const r = await pool.query(Q.setTask, [p.id, p.estado]);
+      if (!r.rowCount) return json(404, { erro: 'task não encontrada' });
+      return json(200, r.rows[0]);
+    }
+
+    // ---- pausar / retomar ----
+    if (u.pathname === '/api/espera' && req.method === 'POST') {
+      const p = JSON.parse(await body(req) || '{}');
+      const motivo = String(p.por_que || '').trim();
+      if (!p.id) return json(400, { erro: 'id inválido' });
+      // Motivo obrigatorio de proposito: pausa sem motivo escrito e a mesma coisa
+      // que abandonar a tarefa, so que com aparencia de decisao.
+      if (motivo.length < 3) return json(400, { erro: 'diga por que está pausando' });
+      const data = p.revisar_em ? String(p.revisar_em).slice(0, 10) : null;
+      if (data && !/^\d{4}-\d{2}-\d{2}$/.test(data)) return json(400, { erro: 'data inválida' });
+      const r = await pool.query(Q.setEspera, [p.id, motivo, data]);
+      if (!r.rowCount) return json(404, { erro: 'task não encontrada' });
+      return json(200, r.rows[0]);
+    }
+
+    if (u.pathname === '/api/retomar' && req.method === 'POST') {
+      const p = JSON.parse(await body(req) || '{}');
+      if (!p.id) return json(400, { erro: 'id inválido' });
+      const r = await pool.query(Q.retomar, [p.id]);
+      if (!r.rowCount) return json(404, { erro: 'task não encontrada' });
+      return json(200, r.rows[0]);
+    }
+
+    // ---- esforço x impacto ----
+    if (u.pathname === '/api/peso' && req.method === 'POST') {
+      const p = JSON.parse(await body(req) || '{}');
+      const n = v => (v === null || v === '' || v === undefined) ? null : Number(v);
+      const es = n(p.esforco), im = n(p.impacto);
+      const ok = v => v === null || (Number.isInteger(v) && v >= 1 && v <= 4);
+      if (!p.id || !ok(es) || !ok(im)) return json(400, { erro: 'esforço ou impacto inválido' });
+      const r = await pool.query(Q.setPeso, [p.id, es, im]);
       if (!r.rowCount) return json(404, { erro: 'task não encontrada' });
       return json(200, r.rows[0]);
     }
