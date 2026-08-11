@@ -6,15 +6,23 @@
 <title>Gestão Cells</title>
 <style>
   :root{
-    --void:#080C11; --card:#0F151C; --card2:#141C25; --line:#222E3A;
-    --ink:#DFE7EE; --ink2:#94A6B6; --ink3:#63758A;
-    --arc:#4ECBDD; --red:#F07A70; --amb:#DFA33C; --grn:#4FC496;
+    /* LIGHT-FIRST, como o resto da marca (ref. On Running). O painel e lido de dia,
+       no celular, no meio do trabalho — fundo claro e o que a marca usa por padrao;
+       escuro era o modo de enfase, e um painel de gestao nao e enfase, e chao. */
+    --void:#F6F8FA; --card:#FFFFFF; --card2:#EEF2F6; --line:#D8E0E8;
+    --ink:#141C24; --ink2:#516375; --ink3:#67798B;
+    /* acentos escurecidos: o ciano #4ECBDD sobre branco da ~1.9:1 e some. */
+    --arc:#0E7F92; --red:#C0392B; --amb:#9A6800; --grn:#0F7A57;
+    --hl:#DCEFF4;   /* realce momentaneo ao pular do mapa para a tarefa */
     --mono:ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,monospace;
     /* A cor diz a NATUREZA do trabalho, nao o assunto. E o que responde a pergunta
        que organiza o dia: isso e um clique, uma decisao, ou uma conversa? */
-    --t-clique:#4ECBDD; --t-decisao:#DFA33C; --t-pessoas:#C99BE8; --t-papelada:#7FA1DE;
-    --t-campo:#4FC496; --t-producao:#EF8B58; --t-construcao:#6B8299; --t-pesquisa:#59B6AC;
+    --t-clique:#0E7F92; --t-decisao:#9A6800; --t-pessoas:#8046B0; --t-papelada:#33619F;
+    --t-campo:#0F7A57; --t-producao:#B85520; --t-construcao:#4A5F72; --t-pesquisa:#15736A;
   }
+  /* sem isto o navegador em modo escuro pinta input, select e scrollbar de escuro
+     por conta propria, e o painel fica com campos pretos num fundo branco. */
+  :root{color-scheme:light}
   *{box-sizing:border-box}
   body{margin:0;padding:0 16px 90px;background:var(--void);color:var(--ink);
     font:15px/1.55 -apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;
@@ -40,7 +48,7 @@
   .box{background:var(--card);border:1px solid var(--line);border-radius:3px;margin-bottom:8px}
 
   /* ---- tarefa ---- */
-  .t{display:flex;gap:11px;padding:11px 14px;border-bottom:1px solid rgba(34,46,58,.55);align-items:flex-start}
+  .t{display:flex;gap:11px;padding:11px 14px;border-bottom:1px solid rgba(216,224,232,.9);align-items:flex-start}
   .t:last-child{border-bottom:none}
   .t input[type=checkbox]{flex:none;width:17px;height:17px;margin:2px 0 0;accent-color:var(--arc);cursor:pointer}
   .t .c{flex:1;min-width:0}
@@ -50,8 +58,8 @@
   .t.ok p{color:var(--ink3)}
   .who{font:600 8.5px/1 var(--mono);letter-spacing:.1em;padding:3px 5px;border-radius:2px;
     flex:none;margin-top:3px}
-  .w-g{background:#2E1614;color:var(--red)} .w-c{background:#0E2A31;color:var(--arc)}
-  .w-a{background:#2C2110;color:var(--amb)}
+  .w-g{background:#FBEAE8;color:var(--red)} .w-c{background:#E1F2F5;color:var(--arc)}
+  .w-a{background:#FAF0DB;color:var(--amb)}
 
   /* ---- frente ---- */
   details.f{background:var(--card);border:1px solid var(--line);border-left:2px solid var(--ink3);
@@ -68,8 +76,8 @@
   summary b{font-size:15px;font-weight:640}
   summary p{margin:2px 0 0;font-size:12.5px;color:var(--ink2)}
   summary .badge{font:600 8.5px/1 var(--mono);letter-spacing:.1em;padding:3px 6px;border-radius:2px;flex:none}
-  .b-red{background:#2E1614;color:var(--red)} .b-amb{background:#2C2110;color:var(--amb)}
-  .b-grn{background:#102C22;color:var(--grn)} .b-off{background:#151D26;color:var(--ink3)}
+  .b-red{background:#FBEAE8;color:var(--red)} .b-amb{background:#FAF0DB;color:var(--amb)}
+  .b-grn{background:#E3F3EB;color:var(--grn)} .b-off{background:#EEF2F6;color:var(--ink3)}
   .inner{padding:2px 15px 15px;border-top:1px solid var(--line)}
   .destrava{background:var(--card2);border-radius:3px;padding:10px 12px;margin:12px 0;font-size:13.5px;color:var(--ink2)}
   .destrava b{color:var(--ink);font-size:11px;font-family:var(--mono);letter-spacing:.12em;display:block;margin-bottom:4px}
@@ -81,10 +89,10 @@
   .ev .top{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
   .ev b{font-size:13.5px;font-weight:600;flex:1;min-width:200px}
   .cf{font:600 8px/1 var(--mono);letter-spacing:.09em;padding:3px 5px;border-radius:2px;flex:none}
-  .cf-confirmado{background:#102C22;color:var(--grn)}
-  .cf-provavel{background:#2C2110;color:var(--amb)}
-  .cf-hipotese{background:#151D26;color:var(--ink2)}
-  .cf-refutado{background:#2E1614;color:var(--red)}
+  .cf-confirmado{background:#E3F3EB;color:var(--grn)}
+  .cf-provavel{background:#FAF0DB;color:var(--amb)}
+  .cf-hipotese{background:#EEF2F6;color:var(--ink2)}
+  .cf-refutado{background:#FBEAE8;color:var(--red)}
   .ev .val{font:12.5px var(--mono);color:var(--arc);margin-top:3px}
   .ev .met{font-size:12px;color:var(--ink3);margin-top:4px;line-height:1.45}
   .ev .met u{text-decoration:none;color:var(--ink2)}
@@ -142,7 +150,7 @@
   .folha{display:flex;gap:9px;align-items:baseline;padding:5px 9px;border-radius:2px;
     background:var(--card2);border-left:2px solid currentColor;cursor:pointer;text-align:left;
     width:100%;font:inherit;color:inherit;border-top:0;border-right:0;border-bottom:0}
-  .folha:hover{background:#1A242F}
+  .folha:hover{background:#E8EEF4}
   .folha .fid{font:600 9px/1.5 var(--mono);color:var(--ink3);flex:none}
   .folha .ftx{font-size:13px;color:var(--ink);flex:1;min-width:0}
   .folha .fp{font:600 8.5px/1.5 var(--mono);flex:none;letter-spacing:.08em}
@@ -483,7 +491,7 @@ function irPara(id) {
   if (!alvo) return;
   alvo.scrollIntoView({ behavior: 'smooth', block: 'center' });
   alvo.style.transition = 'background .2s';
-  alvo.style.background = '#1C2A33';
+  alvo.style.background = 'var(--hl)';   // tinta clara: no fundo branco, escuro vira mancha
   setTimeout(() => { alvo.style.background = ''; }, 1600);
 }
 
