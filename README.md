@@ -37,6 +37,28 @@ meu ponto cego — e ninguém me avisa, porque para ele o comentário estava lá
 O filtro **"só o que depende de mim"** vem ligado: o painel é do Gabriel, e a pergunta
 que ele faz ao abrir não é "o que existe", é "o que trava em mim".
 
+### Comentário dele revisa a INICIATIVA, não só a tarefa
+
+Regra dada pelo Gabriel em 11/08: *"sempre que tiver um comentário, vc deve usar ele para
+revisar a iniciativa."*
+
+Comentário dele quase nunca é sobre a tarefa onde foi escrito — é uma premissa caindo. No mesmo
+dia, três comentários curtos derrubaram um material de oferta pronto, a espinha de um semestre e
+um item do P1 dele que já estava resolvido havia dois meses. Responder "anotado" nos três teria
+deixado os três artefatos errados no ar.
+
+A cada comentário, nesta ordem:
+
+1. Ler como **evidência**, não como recado: *que premissa isso quebra?*
+2. Ir à **fonte primária** (Bling, Shopify, Klaviyo, DNS, Postgres). Citar o documento de origem
+   é repetir o erro com mais palavras.
+3. Propagar para os três lados: a tarefa · **o arquivo que gerou a tarefa** · todo material que
+   dependia da premissa.
+4. Responder **no lugar onde ele escreveu**. Se a resposta só existe no chat, para ele a pergunta
+   ficou sem resposta.
+5. Responder **o que ele perguntou** — pergunta direta ignorada é pior que resposta errada.
+6. Registrar evidência com método; se o comentário me derrubou, `confianca='refutado'`.
+
 ## A tabela que importa: `jarvis.evidencia`
 
 Guarda **como** cada coisa foi verificada (fonte + método + confiança), não só a conclusão.
