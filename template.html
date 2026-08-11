@@ -250,6 +250,38 @@ function flash(msg, erro) {
   clearTimeout(flashT); flashT = setTimeout(() => f.className = '', 2200);
 }
 
+// Busca a evidência de uma frente uma única vez e guarda o resultado no próprio nó.
+// Se falhar, diz que falhou: sumir em silêncio faria a frente parecer sem evidência.
+async function carregaEv(frenteId, zona, total) {
+  if (zona.dataset.st) return;
+  zona.dataset.st = 'indo';
+  try {
+    const r = await fetch('/api/evidencias?frente=' + frenteId);
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const { evidencias } = await r.json();
+    zona.textContent = '';
+    evidencias.forEach(e => {
+      const x = el('div', 'ev');
+      x.append(el('div', 'top',
+        '<b>' + escapa(e.afirmacao) + '</b>' +
+        '<span class="cf cf-' + e.confianca + '">' + e.confianca.toUpperCase() + '</span>'));
+      if (e.valor) x.append(el('div', 'val', escapa(e.valor)));
+      x.append(el('div', 'met', '<u>' + escapa(e.fonte) + '</u> · ' + escapa(e.metodo) +
+        ' · ' + escapa(e.quando) + ' por ' + escapa(e.verificado_por || '—')));
+      zona.append(x);
+    });
+    // O teto do SELECT é 80. Sem esta linha, uma frente com 95 evidências
+    // mostraria 80 e pareceria completa — corte silencioso é o que eu não quero.
+    if (total && evidencias.length < total)
+      zona.append(el('div', 'met',
+        'mostrando ' + evidencias.length + ' de ' + total + ' — as mais recentes'));
+    zona.dataset.st = 'ok';
+  } catch (err) {
+    zona.dataset.st = '';
+    zona.innerHTML = '<div class="met">não deu para carregar a evidência — abra e feche para tentar de novo</div>';
+  }
+}
+
 async function post(rota, corpo) {
   const r = await fetch(rota, { method: 'POST',
     headers: { 'content-type': 'application/json' }, body: JSON.stringify(corpo) });
@@ -573,19 +605,16 @@ function pinta() {
       const cx = el('div', 'box'); ts.forEach(t => cx.append(linhaTask(t))); inner.append(cx);
     }
 
-    const evs = D.evidencias.filter(e => e.frente_id === f.id);
-    if (evs.length) {
+    // A evidência não vem mais na carga inicial: ela era 274 KB de 480 KB e
+    // aparece só aqui dentro. Agora chega quando a frente é aberta, uma vez só.
+    if (f.n_evidencias) {
       inner.append(el('div', 'sub', 'O QUE SE SABE — E COMO'));
-      evs.forEach(e => {
-        const x = el('div', 'ev');
-        x.append(el('div', 'top',
-          '<b>' + escapa(e.afirmacao) + '</b>' +
-          '<span class="cf cf-' + e.confianca + '">' + e.confianca.toUpperCase() + '</span>'));
-        if (e.valor) x.append(el('div', 'val', escapa(e.valor)));
-        x.append(el('div', 'met', '<u>' + escapa(e.fonte) + '</u> · ' + escapa(e.metodo) +
-          ' · ' + escapa(e.quando) + ' por ' + escapa(e.verificado_por || '—')));
-        inner.append(x);
-      });
+      const zona = el('div', 'evz',
+        '<div class="met">' + f.n_evidencias + ' evidência(s) — abra para carregar</div>');
+      inner.append(zona);
+      const puxa = () => { if (d.open) carregaEv(f.id, zona, f.n_evidencias); };
+      d.addEventListener('toggle', puxa);
+      if (d.open) puxa();
     }
 
     const cms = D.comentarios.filter(c => c.frente_id === f.id);

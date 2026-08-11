@@ -48,8 +48,8 @@ function normaliza(row) {
 async function carrega() {
   const c = await pool.connect();
   try {
-    const [fr, tk, ev, co, ct] = await Promise.all([
-      c.query(Q.frentes), c.query(Q.tasks), c.query(Q.evidencias),
+    const [fr, tk, co, ct] = await Promise.all([
+      c.query(Q.frentes), c.query(Q.tasks),
       c.query(Q.comentarios), c.query(Q.contatos),
     ]);
     const sw = await c.query(Q.saudeWebhook);
@@ -59,7 +59,6 @@ async function carrega() {
     return {
       gerado: new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }),
       frentes, tasks,
-      evidencias:  ev.rows.map(normaliza),
       comentarios: co.rows.map(normaliza),
       contatos,
       resumo: {
@@ -131,6 +130,14 @@ http.createServer(async (req, res) => {
   try {
     // ---- dados ----
     if (u.pathname === '/api/dados') return json(200, await carrega());
+
+    // ---- evidência de uma frente, sob demanda ----
+    if (u.pathname === '/api/evidencias') {
+      const id = Number(u.searchParams.get('frente'));
+      if (!Number.isInteger(id) || id <= 0) return json(400, { erro: 'frente inválida' });
+      const r = await pool.query(Q.evidenciasDaFrente, [id]);
+      return json(200, { evidencias: r.rows.map(normaliza) });
+    }
 
     // ---- marcar / desmarcar tarefa ----
     if (u.pathname === '/api/task' && req.method === 'POST') {

@@ -6,6 +6,7 @@ module.exports = {
   // As frentes, já ordenadas como o painel mostra: crítico primeiro, depois a ordem do Gabriel.
   frentes: `
     SELECT f.id, f.slug, f.ordem, f.nome, f.dono, f.estado, f.resumo,
+           (SELECT count(*) FROM jarvis.evidencia e WHERE e.frente_id = f.id)::int AS n_evidencias,
            f.o_que_destrava, f.parada_desde,
            CASE WHEN f.parada_desde IS NOT NULL
                 THEN (CURRENT_DATE - f.parada_desde) END AS dias_parada,
@@ -24,15 +25,19 @@ module.exports = {
         OR t.feita_em > now() - interval '7 days'
      ORDER BY coalesce(t.prioridade,3), (t.dono='gabriel') DESC, t.id`,
 
-  // Evidências: o que se sabe E como se sabe. É o que impede uma conclusão
-  // errada de virar fato permanente só porque foi escrita uma vez.
-  evidencias: `
+  // Evidência de UMA frente, sob demanda. Antes vinham TODAS em toda carga:
+  // 274 KB de um payload de 480 KB, para serem usadas num único lugar da tela,
+  // e crescendo ~200 linhas por dia. O teto de 80 existe para a frente que
+  // acumula muito não recriar o mesmo problema em escala menor.
+  evidenciasDaFrente: `
     SELECT e.id, e.frente_id, e.afirmacao, e.valor, e.fonte, e.metodo,
            e.confianca, e.verificado_por,
            to_char(e.verificado_em AT TIME ZONE 'America/Sao_Paulo','DD/MM') AS quando
       FROM jarvis.evidencia e
+     WHERE e.frente_id = $1
      ORDER BY array_position(ARRAY['refutado','hipotese','provavel','confirmado'], e.confianca),
-              e.verificado_em DESC`,
+              e.verificado_em DESC
+     LIMIT 80`,
 
   // task_id importa tanto quanto frente_id: o comentario de fechamento ("fiz assim,
   // confere isso") fica preso na tarefa, nao solto na frente.
