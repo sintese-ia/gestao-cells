@@ -3,9 +3,15 @@
 
 module.exports = {
 
+  // As 4 BUs. Nível que faltava: antes tudo era "frente" e o painel não
+  // separava o que é do Gabriel pessoa, da Cells, da Síntese e do Revenue Labs.
+  bus: `
+    SELECT b.id, b.slug, b.nome, b.ordem, b.cor, b.resumo
+      FROM jarvis.bu b ORDER BY b.ordem`,
+
   // As frentes, já ordenadas como o painel mostra: crítico primeiro, depois a ordem do Gabriel.
   frentes: `
-    SELECT f.id, f.slug, f.ordem, f.nome, f.dono, f.estado, f.resumo,
+    SELECT f.id, f.slug, f.ordem, f.nome, f.dono, f.estado, f.resumo, f.bu_id,
            (SELECT count(*) FROM jarvis.evidencia e WHERE e.frente_id = f.id)::int AS n_evidencias,
            f.o_que_destrava, f.parada_desde,
            CASE WHEN f.parada_desde IS NOT NULL
@@ -19,7 +25,10 @@ module.exports = {
   tasks: `
     SELECT t.id, t.frente_id, t.titulo, t.detalhe, t.dono, t.estado, t.prazo, t.origem,
            coalesce(t.prioridade,3) AS prioridade, coalesce(t.tipo,'construcao') AS tipo,
-           t.esforco, t.impacto, t.por_que_espera,
+           t.impacto, t.complexidade, t.por_que_espera,
+           to_char(t.prazo,'DD/MM') AS data,
+           t.prazo,
+           CASE WHEN t.prazo IS NOT NULL THEN (t.prazo - CURRENT_DATE) END AS dias_ate,
            to_char(t.revisar_em,'DD/MM') AS revisar,
            CASE WHEN t.revisar_em IS NOT NULL
                 THEN (t.revisar_em - CURRENT_DATE) END AS dias_ate_revisar,
@@ -102,9 +111,22 @@ module.exports = {
 
   // Esforco x impacto existe para responder "alta complexidade e baixo impacto?"
   // sem depender de memoria. O par vive na tarefa; o julgamento e do Gabriel.
+  // 1=baixo 2=medio 3=alto, nos dois. Tres niveis porque foi o que ele pediu:
+  // "IMPACTO - alto medio baixo e COMPLEXIDADE - alto, medio, baixo".
   setPeso: `
-    UPDATE jarvis.task SET esforco = $2, impacto = $3 WHERE id = $1
-    RETURNING id, esforco, impacto`,
+    UPDATE jarvis.task SET complexidade = $2, impacto = $3 WHERE id = $1
+    RETURNING id, complexidade, impacto`,
+
+  // A DATA e o que faz a atividade aparecer em "hoje". Sem ela a tarefa existe
+  // no mapa e nao cobra nada de ninguem — que e exatamente o estado saudavel
+  // da maioria delas.
+  setData: `
+    UPDATE jarvis.task SET prazo = $2 WHERE id = $1
+    RETURNING id, to_char(prazo,'DD/MM') AS data, prazo`,
+
+  moverFrenteDeBu: `
+    UPDATE jarvis.frente SET bu_id = $2, atualizado_em = now() WHERE id = $1
+    RETURNING id, bu_id`,
 
   addComentario: `
     INSERT INTO jarvis.comentario (frente_id, task_id, autor, texto)

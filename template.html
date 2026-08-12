@@ -151,6 +151,17 @@
     background:var(--card2);border-left:2px solid currentColor;cursor:pointer;text-align:left;
     width:100%;font:inherit;color:inherit;border-top:0;border-right:0;border-bottom:0}
   .folha:hover{background:#E8EEF4}
+  /* BU — o nível que faltava */
+  .bu{margin:22px 0 8px}
+  .bu-cab{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:9px;
+          border:1px solid var(--line);background:var(--card)}
+  .bu-cab .bu-pt{width:11px;height:11px;border-radius:3px;flex:none}
+  .bu-cab b{font-size:13px;letter-spacing:.10em}
+  .bu-cab em{font-style:normal;font-size:11.5px;color:var(--ink3);flex:1}
+  .bu-cab .qt{font-size:11px;color:var(--ink3);font-variant-numeric:tabular-nums}
+  .bu-corpo{margin-left:13px;padding-left:15px;border-left:2px solid var(--line)}
+  .selbu{font:inherit;font-size:11px;padding:2px 5px;border:1px solid var(--line);
+         border-radius:6px;background:var(--card);color:var(--ink2)}
   /* pausa e peso */
   .pw{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:8px 14px 12px 52px;
       border-bottom:1px solid var(--line);background:var(--card2)}
@@ -327,12 +338,21 @@ const TIPOS = {
   construcao: ['CONSTRUÇÃO', 'var(--t-construcao)', 'trabalho longo, meu'],
 };
 const ORDEM_TIPO = Object.keys(TIPOS);
-const PRIOS = {
-  1: ['P1', 'AGORA',        'segura trabalho pronto ou dinheiro parado'],
-  2: ['P2', 'ESTA SEMANA',  'importa, mas nao esta sangrando'],
-  3: ['P3', 'QUANDO DER',   'vale fazer, sem data'],
-  4: ['P4', 'DEPOIS',       'agendado, ou depende de outra coisa'],
-};
+// A DATA manda na lista. "Prioridades de hoje" = o que tem data para hoje ou
+// para trás — e é tudo que ele precisa ver hoje. O resto existe no mapa e não
+// cobra nada. Impacto e complexidade ordenam DENTRO da faixa, não entre faixas.
+const FAIXAS = [
+  ['atrasado', 'ATRASADO',    'passou da data',              t => t.dias_ate != null && t.dias_ate < 0],
+  ['hoje',     'HOJE',        'é isto que você vê hoje',     t => t.dias_ate === 0],
+  ['amanha',   'AMANHÃ',      'já tem dia marcado',          t => t.dias_ate === 1],
+  ['semana',   'ESTA SEMANA', 'até 7 dias',                  t => t.dias_ate > 1 && t.dias_ate <= 7],
+  ['depois',   'DEPOIS',      'agendado mais para frente',   t => t.dias_ate > 7],
+  ['sem_data', 'SEM DATA',    'existe, mas não cobra nada hoje', t => t.dias_ate == null],
+];
+const NIVEL = { 1: 'baixo', 2: 'médio', 3: 'alto' };
+// dentro da faixa: impacto alto primeiro; empate, o mais simples antes
+const ordemDentro = (a, b) =>
+  (b.impacto || 0) - (a.impacto || 0) || (a.complexidade || 9) - (b.complexidade || 9) || a.id - b.id;
 
 // Estado da tela. Fica aqui e nao no DOM: repintar nao pode perder o filtro.
 const V = { aba: 'prio', soMinhas: true, verFeitas: false };
@@ -342,7 +362,7 @@ const aberta = t => t.estado === 'aberta' || t.estado === 'fazendo' || t.estado 
 // o valor de pausar e sumir do campo de visao sem sumir do mundo.
 const emEspera = t => t.estado === 'em_espera';
 // Alta complexidade + baixo impacto: o quadrante que o Gabriel pediu para enxergar.
-const pesada = t => Number(t.esforco) >= 3 && Number(t.impacto) <= 2 && t.impacto != null;
+const pesada = t => Number(t.complexidade) === 3 && Number(t.impacto) === 1;
 const visivel = t => (V.verFeitas ? true : aberta(t)) && (V.soMinhas ? meu(t) : true);
 const BADGE = { critico: ['b-red','CRÍTICO'], andando: ['b-amb','ANDANDO'],
                 pronto: ['b-grn','PRONTO'], sem_contexto: ['b-off','SEM CONTEXTO'],
@@ -371,26 +391,24 @@ function linhaTask(t) {
   const chip = el('span', 'chip', tp[0]);
   chip.style.color = tp[1];
 
-  // Mover de prioridade direto na linha. Sem isso a prioridade seria minha opiniao
-  // congelada — e quem sabe a ordem real da semana e o Gabriel, nao eu.
+  // As setas de P1-P4 saíram: quem manda na lista agora é a DATA, então mexer
+  // em prioridade não mudaria nada na tela e seria um botão que finge trabalhar.
+  // No lugar, o gesto que o modelo novo pede: "isto é de hoje".
   const mv = el('div', 'mv');
-  const sobe = el('button', null, '↑'), desce = el('button', null, '↓');
-  sobe.title = 'Subir prioridade'; desce.title = 'Descer prioridade';
-  sobe.setAttribute('aria-label', 'Subir prioridade: ' + t.titulo);
-  desce.setAttribute('aria-label', 'Descer prioridade: ' + t.titulo);
-  const mexe = async (delta, bt) => {
-    const nova = Math.min(4, Math.max(1, Number(t.prioridade || 3) + delta));
-    if (nova === Number(t.prioridade)) return;
-    bt.disabled = true;
+  const hoje = el('button', null, '☀');
+  hoje.title = 'Marcar para hoje';
+  hoje.setAttribute('aria-label', 'Marcar para hoje: ' + t.titulo);
+  hoje.addEventListener('click', async () => {
+    const d = new Date(); const iso = new Date(d.getTime() - d.getTimezoneOffset() * 60000)
+      .toISOString().slice(0, 10);
+    hoje.disabled = true;
     try {
-      await post('/api/prioridade', { id: t.id, prioridade: nova });
-      t.prioridade = nova; flash('Agora é P' + nova); pinta();
-    } catch (e) { flash(e.message, true); bt.disabled = false; }
-  };
-  sobe.addEventListener('click', () => mexe(-1, sobe));
-  desce.addEventListener('click', () => mexe(1, desce));
-  sobe.disabled = Number(t.prioridade) <= 1;
-  desce.disabled = Number(t.prioridade) >= 4;
+      const r = await post('/api/data', { id: t.id, prazo: iso });
+      t.prazo = r.prazo; t.data = r.data; t.dias_ate = 0;
+      flash('Para hoje'); pinta();
+    } catch (e) { flash(e.message, true); hoje.disabled = false; }
+  });
+  hoje.disabled = t.dias_ate === 0;
   const pausa = el('button', null, emEspera(t) ? '▶' : '⏸');
   pausa.title = emEspera(t) ? 'Retomar' : 'Pôr em espera';
   pausa.setAttribute('aria-label', (emEspera(t) ? 'Retomar: ' : 'Pôr em espera: ') + t.titulo);
@@ -404,7 +422,7 @@ function linhaTask(t) {
     }
     formPausa(t, div);
   });
-  mv.append(sobe, desce, pausa);
+  mv.append(hoje, pausa);
 
   div.append(cb, el('span', 'who ' + d[0], d[1]), chip,
     el('div', 'c', '<b>' + escapa(t.titulo) + '</b>' +
@@ -420,26 +438,40 @@ function linhaTask(t) {
   // Esforço x impacto: o par que responde "isso é complexo e rende pouco?".
   // Fica sempre visível porque julgamento que exige clique para aparecer não é feito.
   const pw = el('div', 'pw');
-  const mkSel = (campo, atual, rotulos) => {
+  const mkSel = (campo, atual) => {
     const sl = document.createElement('select');
     sl.setAttribute('aria-label', campo + ' de: ' + t.titulo);
     sl.append(new Option('—', ''));
-    rotulos.forEach((r, i) => sl.append(new Option(r, String(i + 1))));
+    [1, 2, 3].forEach(i => sl.append(new Option(NIVEL[i], String(i))));
     sl.value = atual == null ? '' : String(atual);
     sl.addEventListener('change', async () => {
-      const antes = { esforco: t.esforco, impacto: t.impacto };
+      const antes = { complexidade: t.complexidade, impacto: t.impacto };
       t[campo] = sl.value === '' ? null : Number(sl.value);
       try {
-        await post('/api/peso', { id: t.id, esforco: t.esforco, impacto: t.impacto });
+        await post('/api/peso', { id: t.id, complexidade: t.complexidade, impacto: t.impacto });
         flash('Anotado'); pinta();
-      } catch (e) { t.esforco = antes.esforco; t.impacto = antes.impacto; flash(e.message, true); pinta(); }
+      } catch (e) { Object.assign(t, antes); flash(e.message, true); pinta(); }
     });
     return sl;
   };
-  pw.append(el('label', null, 'esforço'),
-            mkSel('esforco', t.esforco, ['minutos', 'horas', 'dias', 'semanas']),
-            el('label', null, 'impacto'),
-            mkSel('impacto', t.impacto, ['cosmético', 'ajuda', 'move o ponteiro', 'destrava dinheiro']));
+
+  // A DATA fica junto do resto porque é ela que decide se isto aparece hoje.
+  const dt = document.createElement('input');
+  dt.type = 'date'; dt.value = t.prazo ? String(t.prazo).slice(0, 10) : '';
+  dt.setAttribute('aria-label', 'Data de: ' + t.titulo);
+  dt.addEventListener('change', async () => {
+    const antes = { prazo: t.prazo, dias_ate: t.dias_ate };
+    try {
+      const r = await post('/api/data', { id: t.id, prazo: dt.value || null });
+      t.prazo = r.prazo; t.data = r.data;
+      t.dias_ate = r.prazo ? Math.round((new Date(r.prazo) - new Date(new Date().toDateString())) / 86400000) : null;
+      flash(dt.value ? 'Marcado para ' + (r.data || dt.value) : 'Sem data'); pinta();
+    } catch (e) { Object.assign(t, antes); flash(e.message, true); pinta(); }
+  });
+
+  pw.append(el('label', null, 'data'), dt,
+            el('label', null, 'impacto'), mkSel('impacto', t.impacto),
+            el('label', null, 'complexidade'), mkSel('complexidade', t.complexidade));
   if (pesada(t) && !emEspera(t))
     pw.append(el('span', 'alerta-peso', '⚠ complexa e de pouco impacto — candidata a pausa'));
   div.append(pw);
@@ -510,45 +542,75 @@ function pintaLegenda() {
 }
 
 // ---- MAPA: frente -> ramo por tipo -> tarefa ----
+// Mover subfrente de BU na própria tela. Sem isto, a divisão em BUs seria a
+// MINHA leitura congelada — e quatro delas eu chutei (Human System, Gym System,
+// Diário e Operação Autônoma).
+function seletorBu(f) {
+  const sl = document.createElement('select');
+  sl.className = 'selbu';
+  sl.setAttribute('aria-label', 'BU de: ' + f.nome);
+  (D.bus || []).forEach(b => sl.append(new Option(b.nome, String(b.id))));
+  sl.value = String(f.bu_id || '');
+  sl.addEventListener('click', e => e.stopPropagation());
+  sl.addEventListener('change', async () => {
+    const antes = f.bu_id;
+    f.bu_id = Number(sl.value);
+    try { await post('/api/frente-bu', { id: f.id, bu_id: f.bu_id });
+      flash(f.nome + ' → ' + sl.options[sl.selectedIndex].text); pinta(); }
+    catch (e) { f.bu_id = antes; flash(e.message, true); pinta(); }
+  });
+  return sl;
+}
+
 function pintaMapa() {
   const M = $('#mapa'); M.textContent = '';
   let mostrou = 0;
-  D.frentes.forEach(f => {
-    const ts = D.tasks.filter(t => t.frente_id === f.id && visivel(t));
-    if (!ts.length) return;
+  // BU -> subfrente -> atividade. Três níveis, como ele desenhou.
+  // O tipo do trabalho não vira mais um nível: virou a cor do ponto na folha,
+  // senão a árvore ficaria com quatro andares e deixaria de ser legível.
+  (D.bus || []).forEach(bu => {
+    const subs = D.frentes.filter(f => f.bu_id === bu.id);
+    const tsBu = D.tasks.filter(t => visivel(t) && subs.some(f => f.id === t.frente_id));
+    if (!tsBu.length) return;
     mostrou++;
-    const no = el('div', 'no'); no.dataset.e = f.estado;
-    const b = BADGE[f.estado] || BADGE.pausado;
-    const cab = el('div', 'cab');
-    cab.append(el('span', 'n', String(f.ordem).padStart(2, '0')),
-      el('b', null, escapa(f.nome)),
-      el('span', 'badge ' + b[0], b[1]),
-      el('span', 'qt', ts.length + (ts.length === 1 ? ' ITEM' : ' ITENS')));
-    no.append(cab);
 
-    const ramos = el('div', 'ramos');
-    ORDEM_TIPO.forEach(k => {
-      const desse = ts.filter(t => (t.tipo || 'construcao') === k);
-      if (!desse.length) return;
-      const [nome, cor] = TIPOS[k];
-      const r = el('div', 'ramo'); r.style.color = cor;
-      const rot = el('div', 'rot');
-      rot.append(el('span', 'pt'), el('span', 'nm', nome), el('span', 'ct', '· ' + desse.length));
-      r.append(rot);
+    const cx = el('div', 'bu');
+    const cab = el('div', 'bu-cab');
+    const pt = el('span', 'bu-pt'); pt.style.background = bu.cor;
+    cab.append(pt, el('b', null, escapa(bu.nome)), el('em', null, escapa(bu.resumo || '')),
+      el('span', 'qt', tsBu.length + (tsBu.length === 1 ? ' ITEM' : ' ITENS')));
+    cx.append(cab);
+
+    const corpo = el('div', 'bu-corpo');
+    subs.forEach(f => {
+      const ts = D.tasks.filter(t => t.frente_id === f.id && visivel(t));
+      if (!ts.length) return;
+      const no = el('div', 'no'); no.dataset.e = f.estado;
+      const b = BADGE[f.estado] || BADGE.pausado;
+      const cf = el('div', 'cab');
+      cf.append(el('span', 'n', String(f.ordem).padStart(2, '0')),
+        el('b', null, escapa(f.nome)),
+        el('span', 'badge ' + b[0], b[1]),
+        el('span', 'qt', ts.length + (ts.length === 1 ? ' ITEM' : ' ITENS')),
+        seletorBu(f));
+      no.append(cf);
+
       const fo = el('div', 'folhas');
-      desse.sort((a, c) => (a.prioridade || 3) - (c.prioridade || 3)).forEach(t => {
+      ts.sort(ordemDentro).forEach(t => {
+        const tp = TIPOS[t.tipo] || TIPOS.construcao;
         const lf = el('button', 'folha' + (t.estado === 'feita' ? ' done' : ''));
         lf.type = 'button';
-        lf.append(el('span', 'fid', '#' + t.id),
-          el('span', 'ftx', escapa(t.titulo)),
-          el('span', 'fp p' + (t.prioridade || 3), 'P' + (t.prioridade || 3)));
-        // clicar leva a tarefa na lista priorizada, ja destacada
+        const bolinha = el('span', 'pt'); bolinha.style.color = tp[1];
+        lf.title = tp[0] + (t.data ? ' · ' + t.data : '');
+        lf.append(bolinha, el('span', 'fid', '#' + t.id), el('span', 'ftx', escapa(t.titulo)),
+          el('span', 'fp p' + (t.dias_ate == null ? 4 : (t.dias_ate <= 0 ? 1 : (t.dias_ate <= 7 ? 2 : 3))),
+             t.data || '—'));
         lf.addEventListener('click', () => { V.aba = 'prio'; pinta(); irPara(t.id); });
         fo.append(lf);
       });
-      r.append(fo); ramos.append(r);
+      no.append(fo); corpo.append(no);
     });
-    no.append(ramos); M.append(no);
+    cx.append(corpo); M.append(cx);
   });
   if (!mostrou) M.append(el('div', 'vazio', 'Nada para mostrar com esse filtro.'));
 }
@@ -600,16 +662,17 @@ function pintaListas() {
   const L = $('#listas'); L.textContent = '';
   const ts = D.tasks.filter(visivel);
   if (!ts.length) { L.append(el('div', 'vazio', 'Nada para mostrar com esse filtro.')); return; }
-  [1, 2, 3, 4].forEach(p => {
-    const desse = ts.filter(t => Number(t.prioridade || 3) === p);
+  const abertas = ts.filter(t => !emEspera(t));
+  FAIXAS.forEach(([slug, nome, oque, casa], i) => {
+    const desse = abertas.filter(casa);
     if (!desse.length) return;
-    const [tag, nome, oque] = PRIOS[p];
     const fx = el('div', 'faixa');
-    const bb = el('b', null, tag + ' · ' + nome); bb.className = 'p' + p;
+    // atrasado e hoje herdam a cor de P1/P2: é o que sangra e o que é de hoje
+    const bb = el('b', null, nome); bb.className = 'p' + Math.min(4, i === 0 ? 1 : i);
     fx.append(bb, el('span', null, desse.length + ''), el('em', null, oque));
     L.append(fx);
     const cx = el('div', 'box');
-    desse.forEach(t => { const ln = linhaTask(t); ln.id = 'task-' + t.id; cx.append(ln); });
+    desse.sort(ordemDentro).forEach(t => { const ln = linhaTask(t); ln.id = 'task-' + t.id; cx.append(ln); });
     L.append(cx);
   });
 

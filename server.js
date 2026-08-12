@@ -48,9 +48,9 @@ function normaliza(row) {
 async function carrega() {
   const c = await pool.connect();
   try {
-    const [fr, tk, co, ct] = await Promise.all([
+    const [fr, tk, co, ct, bu] = await Promise.all([
       c.query(Q.frentes), c.query(Q.tasks),
-      c.query(Q.comentarios), c.query(Q.contatos),
+      c.query(Q.comentarios), c.query(Q.contatos), c.query(Q.bus),
     ]);
     const sw = await c.query(Q.saudeWebhook);
     const frentes = fr.rows.map(normaliza);
@@ -58,6 +58,7 @@ async function carrega() {
     const contatos = ct.rows.map(normaliza);
     return {
       gerado: new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }),
+      bus: bu.rows.map(normaliza),
       frentes, tasks,
       comentarios: co.rows.map(normaliza),
       contatos,
@@ -171,15 +172,41 @@ http.createServer(async (req, res) => {
       return json(200, r.rows[0]);
     }
 
-    // ---- esforço x impacto ----
+    // ---- impacto x complexidade (1=baixo 2=médio 3=alto) ----
     if (u.pathname === '/api/peso' && req.method === 'POST') {
       const p = JSON.parse(await body(req) || '{}');
       const n = v => (v === null || v === '' || v === undefined) ? null : Number(v);
-      const es = n(p.esforco), im = n(p.impacto);
-      const ok = v => v === null || (Number.isInteger(v) && v >= 1 && v <= 4);
-      if (!p.id || !ok(es) || !ok(im)) return json(400, { erro: 'esforço ou impacto inválido' });
-      const r = await pool.query(Q.setPeso, [p.id, es, im]);
+      const cx = n(p.complexidade), im = n(p.impacto);
+      const ok = v => v === null || (Number.isInteger(v) && v >= 1 && v <= 3);
+      if (!p.id || !ok(cx) || !ok(im)) return json(400, { erro: 'impacto ou complexidade inválido' });
+      const r = await pool.query(Q.setPeso, [p.id, cx, im]);
       if (!r.rowCount) return json(404, { erro: 'task não encontrada' });
+      return json(200, r.rows[0]);
+    }
+
+    // ---- a DATA: é ela que joga a atividade em "hoje" ----
+    if (u.pathname === '/api/data' && req.method === 'POST') {
+      const p = JSON.parse(await body(req) || '{}');
+      if (!p.id) return json(400, { erro: 'id inválido' });
+      const d = p.prazo ? String(p.prazo).slice(0, 10) : null;
+      if (d && !/^\d{4}-\d{2}-\d{2}$/.test(d)) return json(400, { erro: 'data inválida' });
+      const r = await pool.query(Q.setData, [p.id, d]);
+      if (!r.rowCount) return json(404, { erro: 'task não encontrada' });
+      return json(200, r.rows[0]);
+    }
+
+    // ---- mover uma subfrente de BU ----
+    if (u.pathname === '/api/frente-bu' && req.method === 'POST') {
+      const p = JSON.parse(await body(req) || '{}');
+      const bu = Number(p.bu_id);
+      if (!p.id || !Number.isInteger(bu) || bu < 1) return json(400, { erro: 'frente ou BU inválida' });
+      // Checar a BU ANTES de gravar: sem isto o Postgres devolve violação de
+      // chave estrangeira, o handler transforma em 500 e o nome da constraint
+      // vaza para a tela. Erro de entrada tem de sair como 400 e em português.
+      const existe = await pool.query('SELECT 1 FROM jarvis.bu WHERE id = $1', [bu]);
+      if (!existe.rowCount) return json(400, { erro: 'essa BU não existe' });
+      const r = await pool.query(Q.moverFrenteDeBu, [p.id, bu]);
+      if (!r.rowCount) return json(404, { erro: 'frente não encontrada' });
       return json(200, r.rows[0]);
     }
 
